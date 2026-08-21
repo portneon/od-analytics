@@ -1,98 +1,68 @@
-databases:
-  - name: od-analytics-db
-    plan: basic-256mb
-    databaseName: email_intel
-    user: email_intel
+# Zero-cost deployment: Postgres lives outside Render (Neon free tier,
+# persistent -- unlike Render's own free Postgres, which auto-deletes after
+# 30 days). Everything else runs on Render's free plans:
+#
+#   - od-analytics-backend: free web service. Celery runs in "eager" mode
+#     (CELERY_TASK_ALWAYS_EAGER=true) so ingestion tasks execute inline in
+#     the same request instead of being queued to a separate worker --
+#     Render's background workers have no free tier ($7/mo minimum), and a
+#     worker would need Redis too, which this setup avoids entirely.
+#   - od-analytics-frontend: free static site (no spin-down, unlike web
+#     services).
+#
+# Trade-offs of this shape, see docs/render-deploy.md:
+#   - Free web services spin down after 15 min idle; the next request pays a
+#     ~1 min cold start.
+#   - Uploads are processed synchronously in the request (eager mode), so a
+#     large CSV upload will block until processing finishes.
+#   - Local filesystem storage is ephemeral -- fine here because backend and
+#     "worker" are the same process/container, but raw uploaded files won't
+#     survive a redeploy or a cold start after the container is recycled.
+#     Parsed data already committed to Postgres is unaffected.
 
 services:
-  - name: od-analytics-redis
-    type: keyvalue
-    plan: free
-    ipAllowList:
-      - source: 0.0.0.0/0
-        description: everywhere
-
   - name: od-analytics-backend
     type: web
     runtime: docker
-    plan: starter
+    plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
+    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
     healthCheckPath: /health
-    preDeployCommand: alembic upgrade head
     envVars:
+      # Neon connection string, e.g.
+      # postgresql://user:pass@ep-xxxx.neon.tech/email_intel?sslmode=require
       - key: DATABASE_URL
-        fromDatabase:
-          name: od-analytics-db
-          property: connectionString
+        sync: false
+      # Never actually contacted -- task_always_eager=True skips the broker
+      # entirely, but Celery's constructor still needs a syntactically valid
+      # URL.
       - key: REDIS_URL
-        fromService:
-          name: od-analytics-redis
-          type: keyvalue
-          property: connectionString
+        value: redis://localhost:6379/0
       - key: CELERY_TASK_ALWAYS_EAGER
-        value: "false"
+        value: "true"
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_ALGORITHM
         value: HS256
       - key: JWT_EXPIRE_MINUTES
         value: "1440"
-      # Frontend origin -- set to the deployed frontend's real URL after
-      # the static site below is live (avoid "*" in production, see
-      # docs/deployment.md).
+      # Update to the real frontend URL after the first deploy if Render
+      # assigned a different subdomain (name collision), see
+      # docs/render-deploy.md.
       - key: CORS_ORIGINS
         value: https://od-analytics-frontend.onrender.com
-      # Object storage: local filesystem does NOT work here because the
-      # backend and worker are separate containers with no shared disk.
-      # Fill these in with a real S3-compatible bucket (AWS S3, Cloudflare
-      # R2, etc.) before the first deploy -- see docs/deployment.md.
       - key: STORAGE_USE_LOCAL_FS
-        value: "false"
-      - key: STORAGE_ENDPOINT
-        sync: false
-      - key: STORAGE_BUCKET
-        sync: false
-      - key: STORAGE_ACCESS_KEY
-        sync: false
-      - key: STORAGE_SECRET_KEY
-        sync: false
-      # Optional: AI Analyst. Leave unset to run in safe fallback mode.
+        value: "true"
+      - key: LOCAL_STORAGE_PATH
+        value: ./data/raw
+      # Optional: AI Analyst. Leave LLM_API_KEY unset to run in safe
+      # fallback mode (no cost either way -- Groq also has a free tier).
       - key: LLM_PROVIDER
         value: groq
       - key: LLM_MODEL
         value: openai/gpt-oss-120b
       - key: LLM_API_KEY
-        sync: false
-
-  - name: od-analytics-worker
-    type: worker
-    runtime: docker
-    plan: starter
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
-    dockerCommand: celery -A app.workers.celery_app worker --loglevel=info
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: od-analytics-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          name: od-analytics-redis
-          type: keyvalue
-          property: connectionString
-      - key: CELERY_TASK_ALWAYS_EAGER
-        value: "false"
-      - key: STORAGE_USE_LOCAL_FS
-        value: "false"
-      - key: STORAGE_ENDPOINT
-        sync: false
-      - key: STORAGE_BUCKET
-        sync: false
-      - key: STORAGE_ACCESS_KEY
-        sync: false
-      - key: STORAGE_SECRET_KEY
         sync: false
 
   - name: od-analytics-frontend
@@ -103,8 +73,7 @@ services:
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
     envVars:
-      # Vite bakes this in at build time, so it must point at the backend's
-      # real onrender.com URL -- update and trigger a redeploy once the
-      # backend service above is live.
+      # Vite bakes this in at build time -- update to the real backend URL
+      # after the first deploy if it differs, then trigger a redeploy.
       - key: VITE_API_BASE_URL
         value: https://od-analytics-backend.onrender.com/api/v1
