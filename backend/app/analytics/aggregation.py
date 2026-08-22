@@ -8,6 +8,7 @@ rather than duplicating rows, so a job retry after partial failure is safe.
 """
 from __future__ import annotations
 
+import concurrent.futures
 import uuid
 
 from sqlalchemy import Date, case, cast, func, select
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.analytics.rates import compute_rates
 from app.core.config import settings
+from app.core.database import SessionLocal
 from app.core.logging import get_logger
 from app.models.dimensions import Subject
 from app.models.email_event import EmailEvent, EmailStatus
@@ -174,30 +176,6 @@ def calculate_domain_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid
     return len(rows)
 
 
-def calculate_subject_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
-    total, successful, hard, soft, failures = _status_aggregates()
-    stmt = (
-        select(
-            EmailEvent.subject_id, total, successful, hard, soft, failures,
-            func.count(func.distinct(EmailEvent.recipient_id)).label("unique_recipients"),
-        )
-        .where(EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id == dataset_id, EmailEvent.subject_id.is_not(None))
-        .group_by(EmailEvent.subject_id)
-    )
-    rows = []
-    for subject_id, total_v, succ_v, hard_v, soft_v, fail_v, uniq_recip in db.execute(stmt).all():
-        rows.append({
-            "id": uuid.uuid4(),
-            "tenant_id": tenant_id,
-            "dataset_id": dataset_id,
-            "subject_id": subject_id,
-            "unique_recipients": int(uniq_recip or 0),
-            **_row_with_rates(total_v, succ_v, hard_v, soft_v, fail_v),
-        })
-    _upsert(db, SubjectMetrics, rows, ["tenant_id", "dataset_id", "subject_id"])
-    return len(rows)
-
-
 def calculate_sender_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
     total, successful, hard, soft, failures = _status_aggregates()
     stmt = (
@@ -254,77 +232,35 @@ def calculate_bounce_reason_metrics(db: Session, tenant_id: uuid.UUID, dataset_i
     return len(rows)
 
 
-def calculate_infrastructure_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
-    total_rows = 0
-    total, successful, hard, soft, failures = _status_aggregates()
-    for component_type, column in (
-        ("remote_mta", EmailEvent.remote_mta),
-        ("relay_server", EmailEvent.relay_server),
-        ("remote_ip", EmailEvent.remote_ip),
-    ):
-        stmt = (
-            select(
-                column, total, successful, hard, soft, failures,
-                func.count(func.distinct(EmailEvent.recipient_id)).label("unique_recipients"),
-            )
-            .where(EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id == dataset_id, column.is_not(None))
-            .group_by(column)
-        )
-        rows = []
-        for value, total_v, succ_v, hard_v, soft_v, fail_v, uniq_recip in db.execute(stmt).all():
-            rows.append({
-                "id": uuid.uuid4(),
-                "tenant_id": tenant_id,
-                "dataset_id": dataset_id,
-                "component_type": component_type,
-                "component_value": value,
-                "unique_recipients": int(uniq_recip or 0),
-                **_row_with_rates(total_v, succ_v, hard_v, soft_v, fail_v),
-            })
-        _upsert(db, InfrastructureMetrics, rows, ["tenant_id", "dataset_id", "component_type", "component_value"])
-        total_rows += len(rows)
-    return total_rows
-
-
-def calculate_application_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
-    total, successful, hard, soft, failures = _status_aggregates()
-    category_col = func.coalesce(Subject.category, "Other").label("category")
-    stmt = (
-        select(
-            category_col, total, successful, hard, soft, failures,
-            func.count(func.distinct(EmailEvent.recipient_id)).label("unique_recipients"),
-        )
-        .select_from(EmailEvent)
-        .join(Subject, Subject.id == EmailEvent.subject_id, isouter=True)
-        .where(EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id == dataset_id)
-        .group_by(category_col)
-    )
-    rows = []
-    for category, total_v, succ_v, hard_v, soft_v, fail_v, uniq_recip in db.execute(stmt).all():
-        rows.append({
-            "id": uuid.uuid4(),
-            "tenant_id": tenant_id,
-            "dataset_id": dataset_id,
-            "category": category,
-            "unique_recipients": int(uniq_recip or 0),
-            **_row_with_rates(total_v, succ_v, hard_v, soft_v, fail_v),
-        })
-    _upsert(db, ApplicationMetrics, rows, ["tenant_id", "dataset_id", "category"])
-    return len(rows)
-
+def _run_metric(func, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> tuple[str, int]:
+    db = SessionLocal()
+    try:
+        count = func(db, tenant_id, dataset_id)
+        db.commit()
+        return func.__name__, count
+    finally:
+        db.close()
 
 def calculate_all_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> dict[str, int]:
-    counts = {
-        "daily": calculate_daily_metrics(db, tenant_id, dataset_id),
-        "hourly": calculate_hourly_metrics(db, tenant_id, dataset_id),
-        "recipient": calculate_recipient_metrics(db, tenant_id, dataset_id),
-        "domain": calculate_domain_metrics(db, tenant_id, dataset_id),
-        "subject": calculate_subject_metrics(db, tenant_id, dataset_id),
-        "sender": calculate_sender_metrics(db, tenant_id, dataset_id),
-        "bounce_reason": calculate_bounce_reason_metrics(db, tenant_id, dataset_id),
-        "infrastructure": calculate_infrastructure_metrics(db, tenant_id, dataset_id),
-        "application": calculate_application_metrics(db, tenant_id, dataset_id),
-    }
-    db.flush()
+    metrics_funcs = [
+        calculate_daily_metrics,
+        calculate_hourly_metrics,
+        calculate_recipient_metrics,
+        calculate_domain_metrics,
+        calculate_sender_metrics,
+        calculate_bounce_reason_metrics,
+    ]
+    
+    counts = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+        futures = {
+            executor.submit(_run_metric, func, tenant_id, dataset_id): func
+            for func in metrics_funcs
+        }
+        for future in concurrent.futures.as_completed(futures):
+            name, count = future.result()
+            clean_name = name.replace("calculate_", "").replace("_metrics", "")
+            counts[clean_name] = count
+
     logger.info("metrics.calculated", dataset_id=str(dataset_id), **counts)
     return counts
