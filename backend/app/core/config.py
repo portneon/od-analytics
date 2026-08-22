@@ -6,8 +6,9 @@ so they can be changed without touching business logic.
 """
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,24 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql+psycopg2://email_intel:email_intel@localhost:5432/email_intel"
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def normalize_database_url(cls, v: str) -> str:
+        """Normalize provider-issued Postgres URLs for psycopg2 compatibility.
+
+        - Converts ``postgresql://`` to ``postgresql+psycopg2://``.
+        - Strips ``channel_binding`` (unsupported by psycopg2-binary).
+        """
+        if v.startswith("postgresql://"):
+            v = "postgresql+psycopg2://" + v[len("postgresql://"):]
+        parsed = urlparse(v)
+        if parsed.query:
+            params = parse_qs(parsed.query)
+            params.pop("channel_binding", None)
+            cleaned_query = urlencode(params, doseq=True)
+            v = urlunparse(parsed._replace(query=cleaned_query))
+        return v
 
     # Redis / Celery
     REDIS_URL: str = "redis://localhost:6379/0"
