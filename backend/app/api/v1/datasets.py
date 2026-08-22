@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.schemas.common import ok
@@ -38,6 +39,7 @@ async def upload_dataset(
     source: str = Form(default="zoho_mail"),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     upload_files: list[UploadFile] = []
     if files:
@@ -59,8 +61,14 @@ async def upload_dataset(
         job = dataset_service.create_import_job(db, tenant_id=user.tenant_id, dataset_id=dataset.id)
         db.commit()
 
-        async_result = process_dataset_task.delay(str(dataset.id), str(job.id))
-        results.append({"dataset_id": str(dataset.id), "job_id": str(job.id), "status": "QUEUED", "task_id": getattr(async_result, "id", None)})
+        if settings.CELERY_TASK_ALWAYS_EAGER:
+            background_tasks.add_task(process_dataset_task, None, str(dataset.id), str(job.id))
+            async_result_id = None
+        else:
+            async_result = process_dataset_task.delay(str(dataset.id), str(job.id))
+            async_result_id = getattr(async_result, "id", None)
+            
+        results.append({"dataset_id": str(dataset.id), "job_id": str(job.id), "status": "QUEUED", "task_id": async_result_id})
 
     if len(results) == 1:
         return ok(results[0])
@@ -73,6 +81,7 @@ async def upload_multiple_datasets(
     source: str = Form(default="zoho_mail"),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     results = []
     for f in files:
@@ -84,8 +93,14 @@ async def upload_multiple_datasets(
         job = dataset_service.create_import_job(db, tenant_id=user.tenant_id, dataset_id=dataset.id)
         db.commit()
 
-        async_result = process_dataset_task.delay(str(dataset.id), str(job.id))
-        results.append({"dataset_id": str(dataset.id), "job_id": str(job.id), "status": "QUEUED", "task_id": getattr(async_result, "id", None)})
+        if settings.CELERY_TASK_ALWAYS_EAGER:
+            background_tasks.add_task(process_dataset_task, None, str(dataset.id), str(job.id))
+            async_result_id = None
+        else:
+            async_result = process_dataset_task.delay(str(dataset.id), str(job.id))
+            async_result_id = getattr(async_result, "id", None)
+
+        results.append({"dataset_id": str(dataset.id), "job_id": str(job.id), "status": "QUEUED", "task_id": async_result_id})
 
     return ok({"datasets": results, "count": len(results)})
 
