@@ -20,11 +20,9 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # ONE-TIME RESET: the live schema predates the post-Alembic model set
-    # (stale table shape from before ff57df5 removed migrations), so
-    # create_all alone leaves it mismatched. Drop everything once so it's
-    # rebuilt clean, then revert this to create_all-only in the next commit.
-    Base.metadata.drop_all(bind=engine)
+    # Creates any tables that don't exist yet. Never alters existing ones --
+    # a schema change means dropping and recreating the database, not an
+    # in-place migration. Fine for a single-user tool with disposable data.
     Base.metadata.create_all(bind=engine)
     yield
 
