@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getOverview, getDailyTimeline, getInsights, listEntities } from '@/services/analytics'
 import { StatTile, rateTone } from '@/components/StatTile'
 import { TimelineChart } from '@/charts/TimelineChart'
+import { ChartCard } from '@/components/ChartCard'
 import { LoadingState, ErrorState, EmptyState } from '@/components/Feedback'
 import { SeverityBadge } from '@/components/Badges'
 import { formatNumber, formatPercent } from '@/utils/format'
@@ -42,11 +43,17 @@ export function OverviewTab() {
         <StatTile label="Failure Rate" value={formatPercent(ov.failure_rate)} tone={rateTone(ov.failure_rate, 'failure')} />
       </div>
 
-      <div className="card p-4">
-        <h2 className="mb-2 text-sm font-semibold text-slate-700">Email Volume Trend</h2>
-        {timeline.isLoading && <LoadingState />}
-        {timeline.data && <TimelineChart data={timeline.data} />}
-      </div>
+      {timeline.isLoading ? (
+        <div className="card p-4">
+          <LoadingState />
+        </div>
+      ) : (
+        timeline.data && (
+          <ChartCard title="Email Volume Trend">
+            {(expanded) => <TimelineChart data={timeline.data} height={expanded ? 500 : 280} />}
+          </ChartCard>
+        )
+      )}
 
       <DataQualityCard />
 

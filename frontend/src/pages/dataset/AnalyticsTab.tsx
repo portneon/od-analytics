@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getDailyTimeline, getHourlyTimeline, getDayOfWeekTimeline, getApplicationMetrics } from '@/services/analytics'
 import { TimelineChart } from '@/charts/TimelineChart'
 import { RateBarChart } from '@/charts/RateBarChart'
+import { ChartCard } from '@/components/ChartCard'
 import { LoadingState, ErrorState } from '@/components/Feedback'
 import { formatNumber, formatPercent } from '@/utils/format'
 
@@ -19,22 +20,35 @@ export function AnalyticsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="card p-4">
-        <h2 className="mb-2 text-sm font-semibold text-slate-700">Daily Volume &amp; Delivery Outcomes</h2>
-        {daily.data && <TimelineChart data={daily.data} />}
-      </div>
+      {daily.data && (
+        <ChartCard title="Daily Volume & Delivery Outcomes">
+          {(expanded) => <TimelineChart data={daily.data} height={expanded ? 500 : 280} />}
+        </ChartCard>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="card p-4">
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">Volume by Hour of Day</h2>
-          {hourly.data && (
-            <RateBarChart data={hourly.data} xKey="hour" yKey="total_emails" label="Emails" color="#334155" xFormatter={(h) => `${h}:00`} />
-          )}
-        </div>
-        <div className="card p-4">
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">Volume by Day of Week</h2>
-          {dow.data && <RateBarChart data={dow.data} xKey="day_of_week" yKey="total_emails" label="Emails" color="#475569" />}
-        </div>
+        {hourly.data && (
+          <ChartCard title="Volume by Hour of Day">
+            {(expanded) => (
+              <RateBarChart
+                data={hourly.data}
+                xKey="hour"
+                yKey="total_emails"
+                label="Emails"
+                color="#334155"
+                xFormatter={(h) => `${h}:00`}
+                height={expanded ? 500 : 220}
+              />
+            )}
+          </ChartCard>
+        )}
+        {dow.data && (
+          <ChartCard title="Volume by Day of Week">
+            {(expanded) => (
+              <RateBarChart data={dow.data} xKey="day_of_week" yKey="total_emails" label="Emails" color="#475569" height={expanded ? 500 : 220} />
+            )}
+          </ChartCard>
+        )}
       </div>
 
       <div className="card overflow-hidden">

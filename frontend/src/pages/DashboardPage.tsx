@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getExecutiveSummary, getExecutiveTimeline } from '@/services/executive'
 import { StatTile, rateTone } from '@/components/StatTile'
 import { TimelineChart } from '@/charts/TimelineChart'
+import { ChartCard } from '@/components/ChartCard'
 import { LoadingState, ErrorState, EmptyState } from '@/components/Feedback'
 import { SeverityBadge, DatasetStatusBadge } from '@/components/Badges'
 import { formatDate, formatNumber, formatPercent } from '@/utils/format'
@@ -65,14 +66,21 @@ export function DashboardPage() {
         <StatTile label="Failure Rate" value={formatPercent(s.failure_rate)} tone={rateTone(s.failure_rate, 'failure')} />
       </div>
 
-      <div className="card p-4">
-        <h2 className="mb-2 text-sm font-semibold text-slate-700">Email Volume Trend (all datasets)</h2>
-        {timeline.isLoading && <LoadingState />}
-        {timeline.data && timeline.data.length > 0 && <TimelineChart data={timeline.data} />}
-        {timeline.data && timeline.data.length === 0 && (
+      {timeline.isLoading && (
+        <div className="card p-4">
+          <LoadingState />
+        </div>
+      )}
+      {timeline.data && timeline.data.length > 0 && (
+        <ChartCard title="Email Volume Trend (all datasets)">
+          {(expanded) => <TimelineChart data={timeline.data} height={expanded ? 500 : 280} />}
+        </ChartCard>
+      )}
+      {timeline.data && timeline.data.length === 0 && (
+        <div className="card p-4">
           <EmptyState title="No timeline data yet" description="Daily metrics appear once a dataset finishes processing." />
-        )}
-      </div>
+        </div>
+      )}
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Top Insights Across All Datasets</h2>

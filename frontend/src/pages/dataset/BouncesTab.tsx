@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getBounceReasons } from '@/services/analytics'
 import { LoadingState, ErrorState, EmptyState } from '@/components/Feedback'
 import { RateBarChart } from '@/charts/RateBarChart'
+import { ChartCard } from '@/components/ChartCard'
 import { formatNumber, formatPercent } from '@/utils/format'
 
 export function BouncesTab() {
@@ -19,10 +20,11 @@ export function BouncesTab() {
 
   return (
     <div className="space-y-6">
-      <div className="card p-4">
-        <h2 className="mb-2 text-sm font-semibold text-slate-700">Bounce Volume by Reason</h2>
-        <RateBarChart data={data} xKey="business_label" yKey="count" label="Bounces" color="#dc2626" />
-      </div>
+      <ChartCard title="Bounce Volume by Reason">
+        {(expanded) => (
+          <RateBarChart data={data} xKey="business_label" yKey="count" label="Bounces" color="#dc2626" height={expanded ? 500 : 220} />
+        )}
+      </ChartCard>
 
       <div className="card overflow-hidden">
         <table className="table-base">
