@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,12 +10,24 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.database import Base, engine
 from app.core.logging import configure_logging, get_logger
+from app import models  # noqa: F401  ensures every model is registered on Base.metadata
 
 configure_logging(json_logs=settings.APP_ENV == "production")
 logger = get_logger(__name__)
 
-app = FastAPI(title=settings.APP_NAME, version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Creates any tables that don't exist yet. Never alters existing ones --
+    # a schema change means dropping and recreating the database, not an
+    # in-place migration. Fine for a single-user tool with disposable data.
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(title=settings.APP_NAME, version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

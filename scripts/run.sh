@@ -46,8 +46,8 @@ if [ ! -d "$ROOT_DIR/backend/.venv" ]; then
   "$ROOT_DIR/backend/.venv/bin/pip" install -q -r "$ROOT_DIR/backend/requirements.txt"
 fi
 
-echo "==> Applying database migrations"
-(cd "$ROOT_DIR/backend" && ./.venv/bin/alembic upgrade head)
+echo "==> Creating database tables (if missing)"
+(cd "$ROOT_DIR/backend" && ./.venv/bin/python -c "from app.core.database import Base, engine; from app import models; Base.metadata.create_all(engine)")
 
 if [ ! -d "$ROOT_DIR/frontend/node_modules" ]; then
   echo "==> Installing frontend dependencies"

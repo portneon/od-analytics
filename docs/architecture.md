@@ -12,7 +12,8 @@ backend/
   app/analytics/    Aggregation (writes materialized metrics) + read-side query functions
   app/intelligence/ Risk scoring, anomaly detection, root-cause analysis, insights
   app/ai/           LLM provider abstraction, tool definitions, tool executor, orchestrator
-  app/models/       SQLAlchemy ORM models (source of truth for schema, via Alembic)
+  app/models/       SQLAlchemy ORM models (source of truth for schema; tables are
+                    created via Base.metadata.create_all() on startup, no migrations)
   app/schemas/      Pydantic models: canonical event, API request/response shapes
   app/workers/      Celery app + background job definitions
   app/core/         Config, DB session, logging, security/auth dependencies

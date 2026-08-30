@@ -83,9 +83,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp ../.env.example .env   # edit DATABASE_URL etc. if not using Docker Postgres
 
-alembic upgrade head
 uvicorn app.main:app --reload
 ```
+
+Tables are created automatically on startup (`Base.metadata.create_all`) — no
+separate migration step.
 
 Dataset processing runs inline via FastAPI `BackgroundTasks` — no separate worker
 process or broker needed.
@@ -125,13 +127,12 @@ See [.env.example](.env.example) for the full list. Key ones:
 
 ## Database setup
 
-Schema is managed entirely through Alembic migrations — never hand-edit the schema.
-
-```bash
-cd backend
-alembic upgrade head          # apply migrations
-alembic revision --autogenerate -m "description"   # after changing app/models/*
-```
+There are no migrations. The app creates any missing tables on startup via
+`Base.metadata.create_all()` (see `app/main.py`'s lifespan hook) — it never alters an
+existing table. If you change a model's columns after tables already exist, drop and
+recreate the database (or the specific table) rather than expecting the change to
+apply automatically; this is a deliberate simplification for a single-user tool with
+disposable data, not something to fight.
 
 ## Running tests
 
@@ -159,9 +160,9 @@ documented in [docs/api.md](docs/api.md).
 ## Deployment
 
 See [docs/deployment.md](docs/deployment.md). In short: build `backend/Dockerfile` and
-`frontend/Dockerfile.prod` (nginx-served static build), run Alembic migrations as a
-release step, and point `STORAGE_USE_LOCAL_FS` at a real S3-compatible bucket. The API
-has no authentication — only deploy it somewhere not reachable by the public internet,
+`frontend/Dockerfile.prod` (nginx-served static build), and point `STORAGE_USE_LOCAL_FS`
+at a real S3-compatible bucket. The API has no authentication — only deploy it
+somewhere not reachable by the public internet,
 or put it behind your own access control (e.g. a reverse proxy with basic auth, or a
 private network).
 

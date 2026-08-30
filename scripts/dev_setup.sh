@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-shot local dev bootstrap: backend venv + deps, DB migration, sample data.
+# One-shot local dev bootstrap: backend venv + deps, DB tables, sample data.
 # Assumes Postgres is already reachable per backend/.env (or ./.env.example).
 set -euo pipefail
 
@@ -16,7 +16,7 @@ source .venv/bin/activate
 pip install -q --upgrade pip
 pip install -q -r requirements.txt
 
-alembic upgrade head
+python3 -c "from app.core.database import Base, engine; from app import models; Base.metadata.create_all(engine)"
 
 cd "$ROOT_DIR"
 python3 scripts/generate_sample_data.py

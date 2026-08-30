@@ -12,12 +12,17 @@
 ## Release steps
 
 1. Build and push both images.
-2. Run `alembic upgrade head` as a release/init step against the production database —
-   never apply schema changes by hand.
-3. Deploy the API (`uvicorn app.main:app`) behind a reverse proxy/load balancer with
-   TLS termination.
-4. Deploy the frontend static build behind nginx/CDN, pointing `VITE_API_BASE_URL` at
+2. Deploy the API (`uvicorn app.main:app`) behind a reverse proxy/load balancer with
+   TLS termination. It creates any missing tables on startup (`Base.metadata.create_all`
+   in `app/main.py`'s lifespan hook) — there's no separate migration step to run.
+3. Deploy the frontend static build behind nginx/CDN, pointing `VITE_API_BASE_URL` at
    the production API's public URL (baked in at build time).
+
+There are no schema migrations in this app. If a model's columns change after
+production tables already exist, `create_all()` won't alter them — you need to drop
+and recreate the affected table(s) (or the whole database) against the new schema.
+That's a deliberate trade for a single-user tool with disposable data; see
+[docs/database.md](database.md).
 
 ## Security
 
