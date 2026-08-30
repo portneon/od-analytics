@@ -40,10 +40,6 @@ class Settings(BaseSettings):
             v = urlunparse(parsed._replace(query=cleaned_query))
         return v
 
-    # Redis / Celery
-    REDIS_URL: str = "redis://localhost:6379/0"
-    CELERY_TASK_ALWAYS_EAGER: bool = False
-
     # Object storage (S3-compatible / MinIO)
     STORAGE_ENDPOINT: str = "http://localhost:9000"
     STORAGE_BUCKET: str = "email-intel-raw"
@@ -51,11 +47,6 @@ class Settings(BaseSettings):
     STORAGE_SECRET_KEY: str = "minioadmin"
     STORAGE_USE_LOCAL_FS: bool = True
     LOCAL_STORAGE_PATH: str = "./data/raw"
-
-    # Auth
-    JWT_SECRET: str = "change-me-in-production"
-    JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_MINUTES: int = 60 * 24
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:5174"

@@ -1,7 +1,6 @@
 """Binds each AI tool name to a real analytics/database call, scoped to a
-fixed tenant_id/dataset_id captured at executor-creation time. The LLM
-supplies only the declared arguments (sort_by, limit, filters, dates) --
-never tenant_id or dataset_id.
+fixed dataset_id captured at executor-creation time. The LLM supplies only
+the declared arguments (sort_by, limit, filters, dates) -- never dataset_id.
 """
 from __future__ import annotations
 
@@ -38,50 +37,50 @@ def _clamp_limit(limit) -> int:
     return max(1, min(limit, MAX_LIST_LIMIT))
 
 
-def build_executor(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID):
+def build_executor(db: Session, dataset_id: uuid.UUID):
     def _get_overview(_args: dict) -> dict:
-        return overview_analytics.get_overview(db, tenant_id, dataset_id)
+        return overview_analytics.get_overview(db, dataset_id)
 
     def _get_daily_metrics(_args: dict) -> dict:
-        return {"days": timeline_analytics.get_daily_timeline(db, tenant_id, dataset_id)}
+        return {"days": timeline_analytics.get_daily_timeline(db, dataset_id)}
 
     def _get_hourly_metrics(_args: dict) -> dict:
-        return {"hours": timeline_analytics.get_hourly_timeline(db, tenant_id, dataset_id)}
+        return {"hours": timeline_analytics.get_hourly_timeline(db, dataset_id)}
 
     def _get_recipient_metrics(args: dict) -> dict:
         result = recipients_analytics.list_recipients(
-            db, tenant_id, dataset_id, page=1, page_size=_clamp_limit(args.get("limit", DEFAULT_LIST_LIMIT)),
+            db, dataset_id, page=1, page_size=_clamp_limit(args.get("limit", DEFAULT_LIST_LIMIT)),
             sort_by=args.get("sort_by", "total_emails"),
         )
         return {"recipients": result["items"], "total": result["total"]}
 
     def _get_domain_metrics(args: dict) -> dict:
         result = domains_analytics.list_domains(
-            db, tenant_id, dataset_id, page=1, page_size=_clamp_limit(args.get("limit", DEFAULT_LIST_LIMIT)),
+            db, dataset_id, page=1, page_size=_clamp_limit(args.get("limit", DEFAULT_LIST_LIMIT)),
             sort_by=args.get("sort_by", "total_emails"),
         )
         return {"domains": result["items"], "total": result["total"]}
 
     def _get_subject_metrics(args: dict) -> dict:
         result = subjects_analytics.list_subjects(
-            db, tenant_id, dataset_id, page=1, page_size=_clamp_limit(args.get("limit", DEFAULT_LIST_LIMIT)),
+            db, dataset_id, page=1, page_size=_clamp_limit(args.get("limit", DEFAULT_LIST_LIMIT)),
             sort_by=args.get("sort_by", "total_emails"),
         )
         return {"subjects": result["items"], "total": result["total"]}
 
     def _get_sender_metrics(args: dict) -> dict:
         result = senders_analytics.list_senders(
-            db, tenant_id, dataset_id, page=1, page_size=_clamp_limit(args.get("limit", DEFAULT_LIST_LIMIT)),
+            db, dataset_id, page=1, page_size=_clamp_limit(args.get("limit", DEFAULT_LIST_LIMIT)),
             sort_by=args.get("sort_by", "total_emails"),
         )
         return {"senders": result["items"], "total": result["total"]}
 
     def _get_bounce_reasons(_args: dict) -> dict:
-        return {"bounce_reasons": bounces_analytics.list_bounce_reasons(db, tenant_id, dataset_id)}
+        return {"bounce_reasons": bounces_analytics.list_bounce_reasons(db, dataset_id)}
 
     def _get_anomalies(_args: dict) -> dict:
         rows = db.execute(
-            select(Anomaly).where(Anomaly.tenant_id == tenant_id, Anomaly.dataset_id == dataset_id).order_by(Anomaly.detected_at.desc())
+            select(Anomaly).where(Anomaly.dataset_id == dataset_id).order_by(Anomaly.detected_at.desc())
         ).scalars().all()
         return {"anomalies": [
             {
@@ -94,18 +93,18 @@ def build_executor(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID):
 
     def _get_recipient_profile(args: dict) -> dict:
         email = (args.get("email") or "").strip().lower()
-        recipient = db.execute(select(Recipient).where(Recipient.tenant_id == tenant_id, Recipient.email == email)).scalar_one_or_none()
+        recipient = db.execute(select(Recipient).where(Recipient.email == email)).scalar_one_or_none()
         if recipient is None:
             return {"error": f"No recipient found with email '{email}' in this dataset"}
-        profile = recipients_analytics.get_recipient_profile(db, tenant_id, dataset_id, recipient.id)
+        profile = recipients_analytics.get_recipient_profile(db, dataset_id, recipient.id)
         return profile or {"error": "Recipient has no activity in this dataset"}
 
     def _get_domain_profile(args: dict) -> dict:
         domain_value = (args.get("domain") or "").strip().lower()
-        domain = db.execute(select(Domain).where(Domain.tenant_id == tenant_id, Domain.domain == domain_value)).scalar_one_or_none()
+        domain = db.execute(select(Domain).where(Domain.domain == domain_value)).scalar_one_or_none()
         if domain is None:
             return {"error": f"No domain found matching '{domain_value}' in this dataset"}
-        profile = domains_analytics.get_domain_profile(db, tenant_id, dataset_id, domain.id)
+        profile = domains_analytics.get_domain_profile(db, dataset_id, domain.id)
         return profile or {"error": "Domain has no activity in this dataset"}
 
     def _compare_periods(args: dict) -> dict:
@@ -117,7 +116,7 @@ def build_executor(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID):
                 func.coalesce(func.sum(DailyEmailMetrics.soft_bounces), 0),
                 func.coalesce(func.sum(DailyEmailMetrics.failures), 0),
             ).where(
-                DailyEmailMetrics.tenant_id == tenant_id, DailyEmailMetrics.dataset_id == dataset_id,
+                DailyEmailMetrics.dataset_id == dataset_id,
                 DailyEmailMetrics.date >= start, DailyEmailMetrics.date <= end,
             )
             total, succ, hard, soft, fail = (int(v) for v in db.execute(stmt).one())
@@ -132,7 +131,7 @@ def build_executor(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID):
         return {"period_a": period_a, "period_b": period_b}
 
     def _search_email_events(args: dict) -> dict:
-        filters = [EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id == dataset_id]
+        filters = [EmailEvent.dataset_id == dataset_id]
         if args.get("recipient_email"):
             filters.append(EmailEvent.recipient_email == args["recipient_email"].strip().lower())
         if args.get("domain"):
@@ -159,7 +158,7 @@ def build_executor(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID):
         ], "result_count": len(rows), "truncated": len(rows) == MAX_SEARCH_RESULTS}
 
     def _get_application_metrics(_args: dict) -> dict:
-        return {"applications": application_analytics.list_application_metrics(db, tenant_id, dataset_id)}
+        return {"applications": application_analytics.list_application_metrics(db, dataset_id)}
 
     registry = {
         "get_overview": _get_overview,

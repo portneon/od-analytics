@@ -5,7 +5,7 @@ time series, plus IQR as a corroborating signal, plus one-sided z-score
 across entities (domains/subjects/senders/infrastructure) with enough volume
 to be statistically meaningful. Isolation Forest / EWMA / seasonality-aware
 detection are natural follow-ons once there is enough multi-dataset history
-per tenant to make them worthwhile -- not needed for a single-import MVP.
+to make them worthwhile -- not needed for a single-import MVP.
 """
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def _pct_change(observed: float, expected: float) -> float:
 
 
 def _detect_daily_metric_anomalies(
-    tenant_id: uuid.UUID, dataset_id: uuid.UUID, daily_rows: list[DailyEmailMetrics], metric: str
+    dataset_id: uuid.UUID, daily_rows: list[DailyEmailMetrics], metric: str
 ) -> list[dict]:
     if len(daily_rows) < settings.ANOMALY_MIN_HISTORY_POINTS:
         return []
@@ -78,7 +78,6 @@ def _detect_daily_metric_anomalies(
         pct = _pct_change(value, mean)
         anomalies.append({
             "id": uuid.uuid4(),
-            "tenant_id": tenant_id,
             "dataset_id": dataset_id,
             "metric": metric,
             "entity_type": "overall",
@@ -111,7 +110,7 @@ def _recommendations_for_metric(metric: str) -> list[str]:
 
 
 def _detect_entity_anomalies(
-    tenant_id: uuid.UUID, dataset_id: uuid.UUID, rows: list, entity_type: str, name_lookup: dict[uuid.UUID, str], id_field: str
+    dataset_id: uuid.UUID, rows: list, entity_type: str, name_lookup: dict[uuid.UUID, str], id_field: str
 ) -> list[dict]:
     eligible = [r for r in rows if r.total_emails >= MIN_ENTITY_VOLUME_FOR_ANOMALY]
     if len(eligible) < 3:
@@ -131,7 +130,6 @@ def _detect_entity_anomalies(
         label = name_lookup.get(entity_id, str(entity_id))
         anomalies.append({
             "id": uuid.uuid4(),
-            "tenant_id": tenant_id,
             "dataset_id": dataset_id,
             "metric": "bounce_rate",
             "entity_type": entity_type,
@@ -153,32 +151,32 @@ def _detect_entity_anomalies(
     return anomalies
 
 
-def detect_anomalies(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
-    db.execute(delete(Anomaly).where(Anomaly.tenant_id == tenant_id, Anomaly.dataset_id == dataset_id))
+def detect_anomalies(db: Session, dataset_id: uuid.UUID) -> int:
+    db.execute(delete(Anomaly).where(Anomaly.dataset_id == dataset_id))
 
     daily_rows = list(
         db.execute(
             select(DailyEmailMetrics)
-            .where(DailyEmailMetrics.tenant_id == tenant_id, DailyEmailMetrics.dataset_id == dataset_id)
+            .where(DailyEmailMetrics.dataset_id == dataset_id)
             .order_by(DailyEmailMetrics.date)
         ).scalars()
     )
 
     all_anomalies: list[dict] = []
     for metric in ("total_emails", "bounce_rate", "failure_rate"):
-        all_anomalies.extend(_detect_daily_metric_anomalies(tenant_id, dataset_id, daily_rows, metric))
+        all_anomalies.extend(_detect_daily_metric_anomalies(dataset_id, daily_rows, metric))
 
-    domain_rows = list(db.execute(select(DomainMetrics).where(DomainMetrics.tenant_id == tenant_id, DomainMetrics.dataset_id == dataset_id)).scalars())
-    domain_names = {d.id: d.domain for d in db.execute(select(Domain).where(Domain.tenant_id == tenant_id)).scalars()}
-    all_anomalies.extend(_detect_entity_anomalies(tenant_id, dataset_id, domain_rows, "domain", domain_names, "domain_id"))
+    domain_rows = list(db.execute(select(DomainMetrics).where(DomainMetrics.dataset_id == dataset_id)).scalars())
+    domain_names = {d.id: d.domain for d in db.execute(select(Domain)).scalars()}
+    all_anomalies.extend(_detect_entity_anomalies(dataset_id, domain_rows, "domain", domain_names, "domain_id"))
 
-    subject_rows = list(db.execute(select(SubjectMetrics).where(SubjectMetrics.tenant_id == tenant_id, SubjectMetrics.dataset_id == dataset_id)).scalars())
-    subject_names = {s.id: s.subject for s in db.execute(select(Subject).where(Subject.tenant_id == tenant_id)).scalars()}
-    all_anomalies.extend(_detect_entity_anomalies(tenant_id, dataset_id, subject_rows, "subject", subject_names, "subject_id"))
+    subject_rows = list(db.execute(select(SubjectMetrics).where(SubjectMetrics.dataset_id == dataset_id)).scalars())
+    subject_names = {s.id: s.subject for s in db.execute(select(Subject)).scalars()}
+    all_anomalies.extend(_detect_entity_anomalies(dataset_id, subject_rows, "subject", subject_names, "subject_id"))
 
-    sender_rows = list(db.execute(select(SenderMetrics).where(SenderMetrics.tenant_id == tenant_id, SenderMetrics.dataset_id == dataset_id)).scalars())
-    sender_names = {s.id: s.email for s in db.execute(select(Sender).where(Sender.tenant_id == tenant_id)).scalars()}
-    all_anomalies.extend(_detect_entity_anomalies(tenant_id, dataset_id, sender_rows, "sender", sender_names, "sender_id"))
+    sender_rows = list(db.execute(select(SenderMetrics).where(SenderMetrics.dataset_id == dataset_id)).scalars())
+    sender_names = {s.id: s.email for s in db.execute(select(Sender)).scalars()}
+    all_anomalies.extend(_detect_entity_anomalies(dataset_id, sender_rows, "sender", sender_names, "sender_id"))
 
     if all_anomalies:
         db.bulk_insert_mappings(Anomaly, all_anomalies)

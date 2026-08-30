@@ -16,13 +16,6 @@ export interface PageMeta {
   total_pages: number
 }
 
-export interface User {
-  id: string
-  email: string
-  name: string
-  role: 'ADMIN' | 'EXECUTIVE' | 'ANALYST' | 'VIEWER'
-}
-
 export interface Dataset {
   id: string
   name: string

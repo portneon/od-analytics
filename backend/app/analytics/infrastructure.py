@@ -8,10 +8,8 @@ from sqlalchemy.orm import Session
 from app.models.metrics import InfrastructureMetrics
 
 
-def list_infrastructure(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID, component_type: str | None = None) -> list[dict]:
-    stmt = select(InfrastructureMetrics).where(
-        InfrastructureMetrics.tenant_id == tenant_id, InfrastructureMetrics.dataset_id == dataset_id
-    )
+def list_infrastructure(db: Session, dataset_id: uuid.UUID, component_type: str | None = None) -> list[dict]:
+    stmt = select(InfrastructureMetrics).where(InfrastructureMetrics.dataset_id == dataset_id)
     if component_type:
         stmt = stmt.where(InfrastructureMetrics.component_type == component_type)
     stmt = stmt.order_by(InfrastructureMetrics.total_emails.desc())

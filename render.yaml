@@ -2,11 +2,10 @@
 # persistent -- unlike Render's own free Postgres, which auto-deletes after
 # 30 days). Everything else runs on Render's free plans:
 #
-#   - od-analytics-backend: free web service. Celery runs in "eager" mode
-#     (CELERY_TASK_ALWAYS_EAGER=true) so ingestion tasks execute inline in
-#     the same request instead of being queued to a separate worker --
-#     Render's background workers have no free tier ($7/mo minimum), and a
-#     worker would need Redis too, which this setup avoids entirely.
+#   - od-analytics-backend: free web service. Ingestion runs via FastAPI
+#     BackgroundTasks inline in the same process -- no separate worker or
+#     broker needed (Render's background workers have no free tier, $7/mo
+#     minimum).
 #   - od-analytics-frontend: free static site (no spin-down, unlike web
 #     services).
 #
@@ -34,19 +33,6 @@ services:
       # postgresql://user:pass@ep-xxxx.neon.tech/email_intel?sslmode=require
       - key: DATABASE_URL
         sync: false
-      # Never actually contacted -- task_always_eager=True skips the broker
-      # entirely, but Celery's constructor still needs a syntactically valid
-      # URL.
-      - key: REDIS_URL
-        value: redis://localhost:6379/0
-      - key: CELERY_TASK_ALWAYS_EAGER
-        value: "true"
-      - key: JWT_SECRET
-        generateValue: true
-      - key: JWT_ALGORITHM
-        value: HS256
-      - key: JWT_EXPIRE_MINUTES
-        value: "1440"
       # Update to the real frontend URL after the first deploy if Render
       # assigned a different subdomain (name collision), see
       # docs/render-deploy.md.

@@ -25,7 +25,7 @@ _FAILURE_STATUSES = {EmailStatus.HARD_BOUNCE, EmailStatus.SOFT_BOUNCE, EmailStat
 
 # Saturation points: the count/streak at which that component of the score
 # hits its full weight. Chosen conservatively (a handful of hard bounces is
-# already a strong signal); tune per-tenant later if needed.
+# already a strong signal); tune further later if needed.
 HARD_BOUNCE_SATURATION = 5
 SOFT_BOUNCE_SATURATION = 10
 FAILURE_STREAK_SATURATION = 5
@@ -102,11 +102,10 @@ def _score_recipient(
     return round(min(score, 100.0), 1), reasons
 
 
-def calculate_recipient_risk(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
+def calculate_recipient_risk(db: Session, dataset_id: uuid.UUID) -> int:
     stmt = (
         select(EmailEvent.recipient_id, EmailEvent.event_time, EmailEvent.status)
         .where(
-            EmailEvent.tenant_id == tenant_id,
             EmailEvent.dataset_id == dataset_id,
             EmailEvent.recipient_id.is_not(None),
         )
@@ -138,7 +137,6 @@ def calculate_recipient_risk(db: Session, tenant_id: uuid.UUID, dataset_id: uuid
             last_failure_at=last_failure_at, as_of=as_of,
         )
         results.append({
-            "b_tenant_id": tenant_id,
             "b_dataset_id": dataset_id,
             "b_recipient_id": recipient_id,
             "b_risk_score": score,
@@ -153,7 +151,6 @@ def calculate_recipient_risk(db: Session, tenant_id: uuid.UUID, dataset_id: uuid
     stmt = (
         update(table)
         .where(
-            table.c.tenant_id == bindparam("b_tenant_id"),
             table.c.dataset_id == bindparam("b_dataset_id"),
             table.c.recipient_id == bindparam("b_recipient_id"),
         )

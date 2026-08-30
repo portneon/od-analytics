@@ -5,7 +5,6 @@ from app.ingestion.hashing import compute_raw_record_hash
 
 def _hash(**overrides):
     base = dict(
-        tenant_id="tenant-1",
         sender="from@example.com",
         recipient="to@example.com",
         subject="Hello",
@@ -28,7 +27,3 @@ def test_timestamp_bucketing_absorbs_small_jitter():
     h1 = _hash(timestamp=datetime(2026, 7, 1, 10, 0, 5, tzinfo=timezone.utc))
     h2 = _hash(timestamp=datetime(2026, 7, 1, 10, 0, 45, tzinfo=timezone.utc))
     assert h1 == h2  # same 60s bucket
-
-
-def test_different_tenant_changes_hash():
-    assert _hash() != _hash(tenant_id="tenant-2")

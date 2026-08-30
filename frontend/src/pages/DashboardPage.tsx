@@ -7,8 +7,8 @@ import { LoadingState, ErrorState, EmptyState } from '@/components/Feedback'
 import { SeverityBadge, DatasetStatusBadge } from '@/components/Badges'
 import { formatDate, formatNumber, formatPercent } from '@/utils/format'
 
-/** The executive landing page: a tenant-wide rollup across every dataset,
- * not scoped to any one import. Per-dataset detail lives under /datasets/:id. */
+/** The executive landing page: a rollup across every dataset, not scoped to
+ * any one import. Per-dataset detail lives under /datasets/:id. */
 export function DashboardPage() {
   const navigate = useNavigate()
   const summary = useQuery({ queryKey: ['executive-summary'], queryFn: getExecutiveSummary })
@@ -25,7 +25,7 @@ export function DashboardPage() {
         <h1 className="mb-4 text-lg font-semibold text-slate-900">Executive Dashboard</h1>
         <EmptyState
           title="No datasets yet"
-          description="Upload your first Zoho Mail CSV export to see tenant-wide delivery analytics and executive insights here."
+          description="Upload your first Zoho Mail CSV export to see delivery analytics and executive insights here."
         />
         <div className="mt-4 text-center">
           <button className="btn-primary" onClick={() => navigate('/datasets')}>

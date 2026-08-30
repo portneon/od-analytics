@@ -22,7 +22,6 @@ class Anomaly(Base):
     __tablename__ = "anomalies"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
 
     metric: Mapped[str] = mapped_column(String(50), index=True)  # e.g. volume, bounce_rate, failure_rate

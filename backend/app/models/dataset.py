@@ -23,7 +23,6 @@ class Dataset(Base, TimestampMixin):
     __tablename__ = "datasets"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     source: Mapped[str] = mapped_column(String(50), nullable=False, default="zoho_mail")
     file_name: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -37,7 +36,6 @@ class Dataset(Base, TimestampMixin):
     schema_version: Mapped[str] = mapped_column(String(20), default="1.0")
     quality_report: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
-    tenant: Mapped["Tenant"] = relationship(back_populates="datasets")
     import_jobs: Mapped[list["ImportJob"]] = relationship(back_populates="dataset", cascade="all, delete-orphan")
 
 
@@ -53,7 +51,6 @@ class ImportJob(Base, TimestampMixin):
     __tablename__ = "import_jobs"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
     status: Mapped[ImportJobStatus] = mapped_column(
         Enum(ImportJobStatus, name="import_job_status"), default=ImportJobStatus.QUEUED

@@ -59,10 +59,8 @@ class PipelineResult:
     quality_report: DataQualityReport
 
 
-def _load_category_rules(db: Session, tenant_id: uuid.UUID) -> list[CategoryRule] | None:
-    rows = db.execute(
-        select(ApplicationCategoryRule).where(ApplicationCategoryRule.tenant_id == tenant_id)
-    ).scalars().all()
+def _load_category_rules(db: Session) -> list[CategoryRule] | None:
+    rows = db.execute(select(ApplicationCategoryRule)).scalars().all()
     if not rows:
         return None
     return [CategoryRule(category=r.category, match_type=r.match_type, pattern=r.pattern, priority=r.priority) for r in rows]
@@ -71,7 +69,6 @@ def _load_category_rules(db: Session, tenant_id: uuid.UUID) -> list[CategoryRule
 def run_ingestion_pipeline(
     db: Session,
     *,
-    tenant_id: uuid.UUID,
     dataset_id: uuid.UUID,
     file_path: str,
     source: str = "zoho_mail",
@@ -83,7 +80,7 @@ def run_ingestion_pipeline(
     mapping = adapter.detect(loaded.columns)
 
     parsed_rows: list[ParsedRow] = list(
-        adapter.parse(loaded.df, mapping, tenant_id=str(tenant_id), dataset_id=str(dataset_id))
+        adapter.parse(loaded.df, mapping, dataset_id=str(dataset_id))
     )
 
     valid_events: list[CanonicalEmailEvent] = []
@@ -114,7 +111,6 @@ def run_ingestion_pipeline(
 
     hashes = [
         compute_raw_record_hash(
-            tenant_id=str(tenant_id),
             sender=e.sender,
             recipient=e.recipient,
             subject=e.subject,
@@ -129,8 +125,8 @@ def run_ingestion_pipeline(
         duplicate_flags.append(h in seen_hashes)
         seen_hashes.add(h)
 
-    category_rules = _load_category_rules(db, tenant_id)
-    dim_cache = sync_dimensions(db, tenant_id, valid_events, category_rules)
+    category_rules = _load_category_rules(db)
+    dim_cache = sync_dimensions(db, valid_events, category_rules)
 
     orm_rows: list[EmailEvent] = []
     now = datetime.now(timezone.utc)
@@ -140,7 +136,6 @@ def run_ingestion_pipeline(
     for local_pos, event in enumerate(valid_events):
         retry_group_id, retry_count, is_retry = retry_map.get(local_pos, (None, 0, False))
         row = EmailEvent(
-            tenant_id=tenant_id,
             dataset_id=dataset_id,
             event_time=event.timestamp,
             sender_id=dim_cache.sender_ids.get(event.sender) if event.sender else None,

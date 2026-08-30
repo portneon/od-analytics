@@ -1,5 +1,5 @@
-"""Cross-dataset executive rollup: the tenant-wide "how is email health
-across everything we've imported" view, as opposed to app.analytics.overview
+"""Cross-dataset executive rollup: the "how is email health across
+everything we've imported" view, as opposed to app.analytics.overview
 which is scoped to a single dataset. Reuses the same rate math (compute_rates)
 and the same insight-generation path (generate_executive_insights) so the
 executive dashboard can never drift from the per-dataset numbers it's built
@@ -21,12 +21,12 @@ from app.models.metrics import DailyEmailMetrics
 _USABLE_STATUSES = (DatasetStatus.COMPLETED, DatasetStatus.PARTIAL)
 
 
-def get_executive_daily_timeline(db: Session, tenant_id: uuid.UUID) -> list[dict]:
-    """Daily volume/rates summed across every usable dataset for the tenant,
-    grouped by calendar date -- the same DailyEmailMetrics rows the
-    per-dataset timeline reads, just rolled up instead of filtered to one
-    dataset_id, so it can never disagree with the per-dataset charts."""
-    usable_ids = select(Dataset.id).where(Dataset.tenant_id == tenant_id, Dataset.status.in_(_USABLE_STATUSES))
+def get_executive_daily_timeline(db: Session) -> list[dict]:
+    """Daily volume/rates summed across every usable dataset, grouped by
+    calendar date -- the same DailyEmailMetrics rows the per-dataset
+    timeline reads, just rolled up instead of filtered to one dataset_id,
+    so it can never disagree with the per-dataset charts."""
+    usable_ids = select(Dataset.id).where(Dataset.status.in_(_USABLE_STATUSES))
 
     total = func.sum(DailyEmailMetrics.total_emails)
     successful = func.sum(DailyEmailMetrics.successful)
@@ -36,7 +36,7 @@ def get_executive_daily_timeline(db: Session, tenant_id: uuid.UUID) -> list[dict
 
     stmt = (
         select(DailyEmailMetrics.date, total, successful, hard, soft, failures)
-        .where(DailyEmailMetrics.tenant_id == tenant_id, DailyEmailMetrics.dataset_id.in_(usable_ids))
+        .where(DailyEmailMetrics.dataset_id.in_(usable_ids))
         .group_by(DailyEmailMetrics.date)
         .order_by(DailyEmailMetrics.date)
     )
@@ -56,10 +56,8 @@ def get_executive_daily_timeline(db: Session, tenant_id: uuid.UUID) -> list[dict
     return result
 
 
-def get_executive_summary(db: Session, tenant_id: uuid.UUID, *, insight_limit: int = 8, recent_datasets_limit: int = 8) -> dict:
-    datasets = list(
-        db.execute(select(Dataset).where(Dataset.tenant_id == tenant_id).order_by(Dataset.created_at.desc())).scalars()
-    )
+def get_executive_summary(db: Session, *, insight_limit: int = 8, recent_datasets_limit: int = 8) -> dict:
+    datasets = list(db.execute(select(Dataset).order_by(Dataset.created_at.desc())).scalars())
     status_counts: dict[str, int] = {}
     for d in datasets:
         status_counts[d.status.value] = status_counts.get(d.status.value, 0) + 1
@@ -77,7 +75,7 @@ def get_executive_summary(db: Session, tenant_id: uuid.UUID, *, insight_limit: i
     if usable_ids:
         row = db.execute(
             select(total, successful, hard, soft, failures, unique_recipients, unique_domains).where(
-                EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id.in_(usable_ids)
+                EmailEvent.dataset_id.in_(usable_ids)
             )
         ).one()
         total_v, succ_v, hard_v, soft_v, fail_v, uniq_r, uniq_d = (int(v or 0) for v in row)
@@ -86,7 +84,7 @@ def get_executive_summary(db: Session, tenant_id: uuid.UUID, *, insight_limit: i
 
     rates = compute_rates(total=total_v, successful=succ_v, hard_bounces=hard_v, soft_bounces=soft_v, failures=fail_v)
 
-    insights = generate_executive_insights(db, tenant_id, dataset_id=None, limit=insight_limit)
+    insights = generate_executive_insights(db, dataset_id=None, limit=insight_limit)
     dataset_names = {d.id: d.name for d in datasets}
     for insight in insights:
         insight["dataset_name"] = dataset_names.get(uuid.UUID(insight["dataset_id"]))

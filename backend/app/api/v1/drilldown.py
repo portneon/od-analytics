@@ -11,7 +11,7 @@ from app.analytics import domains as domains_analytics
 from app.analytics import recipients as recipients_analytics
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.deps import ApiError, CurrentUser, get_current_user
+from app.core.deps import ApiError
 from app.intelligence.insights import generate_executive_insights
 from app.intelligence.root_cause import analyze_root_cause
 from app.models.anomaly import Anomaly
@@ -24,22 +24,18 @@ router = APIRouter(prefix="/datasets/{dataset_id}", tags=["drilldown"])
 
 
 @router.get("/recipients/{recipient_id}")
-def recipient_profile(
-    dataset_id: uuid.UUID, recipient_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
-):
-    get_dataset_or_404(db, tenant_id=user.tenant_id, dataset_id=dataset_id)
-    profile = recipients_analytics.get_recipient_profile(db, user.tenant_id, dataset_id, recipient_id)
+def recipient_profile(dataset_id: uuid.UUID, recipient_id: uuid.UUID, db: Session = Depends(get_db)):
+    get_dataset_or_404(db, dataset_id=dataset_id)
+    profile = recipients_analytics.get_recipient_profile(db, dataset_id, recipient_id)
     if profile is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, "RECIPIENT_NOT_FOUND", "Recipient was not found")
     return ok(profile)
 
 
 @router.get("/domains/{domain_id}")
-def domain_profile(
-    dataset_id: uuid.UUID, domain_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
-):
-    get_dataset_or_404(db, tenant_id=user.tenant_id, dataset_id=dataset_id)
-    profile = domains_analytics.get_domain_profile(db, user.tenant_id, dataset_id, domain_id)
+def domain_profile(dataset_id: uuid.UUID, domain_id: uuid.UUID, db: Session = Depends(get_db)):
+    get_dataset_or_404(db, dataset_id=dataset_id)
+    profile = domains_analytics.get_domain_profile(db, dataset_id, domain_id)
     if profile is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, "DOMAIN_NOT_FOUND", "Domain was not found")
     return ok(profile)
@@ -58,12 +54,11 @@ def list_events(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=500),
     db: Session = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
 ):
-    get_dataset_or_404(db, tenant_id=user.tenant_id, dataset_id=dataset_id)
+    get_dataset_or_404(db, dataset_id=dataset_id)
     page_size = min(page_size, settings.MAX_PAGE_SIZE)
 
-    filters = [EmailEvent.tenant_id == user.tenant_id, EmailEvent.dataset_id == dataset_id]
+    filters = [EmailEvent.dataset_id == dataset_id]
     if recipient_id:
         filters.append(EmailEvent.recipient_id == recipient_id)
     if domain_id:
@@ -91,10 +86,10 @@ def list_events(
 
 
 @router.get("/events/{event_id}")
-def event_detail(dataset_id: uuid.UUID, event_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    get_dataset_or_404(db, tenant_id=user.tenant_id, dataset_id=dataset_id)
+def event_detail(dataset_id: uuid.UUID, event_id: uuid.UUID, db: Session = Depends(get_db)):
+    get_dataset_or_404(db, dataset_id=dataset_id)
     event = db.execute(
-        select(EmailEvent).where(EmailEvent.tenant_id == user.tenant_id, EmailEvent.dataset_id == dataset_id, EmailEvent.id == event_id)
+        select(EmailEvent).where(EmailEvent.dataset_id == dataset_id, EmailEvent.id == event_id)
     ).scalar_one_or_none()
     if event is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, "EVENT_NOT_FOUND", "Event was not found")
@@ -104,10 +99,10 @@ def event_detail(dataset_id: uuid.UUID, event_id: uuid.UUID, db: Session = Depen
 
 
 @router.get("/anomalies")
-def list_anomalies(dataset_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    get_dataset_or_404(db, tenant_id=user.tenant_id, dataset_id=dataset_id)
+def list_anomalies(dataset_id: uuid.UUID, db: Session = Depends(get_db)):
+    get_dataset_or_404(db, dataset_id=dataset_id)
     rows = db.execute(
-        select(Anomaly).where(Anomaly.tenant_id == user.tenant_id, Anomaly.dataset_id == dataset_id).order_by(Anomaly.detected_at.desc())
+        select(Anomaly).where(Anomaly.dataset_id == dataset_id).order_by(Anomaly.detected_at.desc())
     ).scalars().all()
     return ok([
         {
@@ -132,9 +127,9 @@ def list_anomalies(dataset_id: uuid.UUID, db: Session = Depends(get_db), user: C
 
 
 @router.get("/insights")
-def list_insights(dataset_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    get_dataset_or_404(db, tenant_id=user.tenant_id, dataset_id=dataset_id)
-    return ok(generate_executive_insights(db, user.tenant_id, dataset_id))
+def list_insights(dataset_id: uuid.UUID, db: Session = Depends(get_db)):
+    get_dataset_or_404(db, dataset_id=dataset_id)
+    return ok(generate_executive_insights(db, dataset_id))
 
 
 @router.get("/root-cause")
@@ -143,10 +138,9 @@ def root_cause(
     metric: str = Query(default="bounce_rate", pattern="^(bounce_rate|failure_rate)$"),
     on_date: date_type | None = None,
     db: Session = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
 ):
-    get_dataset_or_404(db, tenant_id=user.tenant_id, dataset_id=dataset_id)
-    return ok(analyze_root_cause(db, user.tenant_id, dataset_id, metric=metric, on_date=on_date))
+    get_dataset_or_404(db, dataset_id=dataset_id)
+    return ok(analyze_root_cause(db, dataset_id, metric=metric, on_date=on_date))
 
 
 def _serialize_event(e: EmailEvent) -> dict:

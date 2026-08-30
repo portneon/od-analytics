@@ -24,7 +24,7 @@ class SourceAdapter(ABC):
 
     @abstractmethod
     def parse(
-        self, df: pl.DataFrame, mapping: SchemaMapping, *, tenant_id: str, dataset_id: str
+        self, df: pl.DataFrame, mapping: SchemaMapping, *, dataset_id: str
     ) -> Iterator[ParsedRow]:
         """Yield one ParsedRow per source row, in order. Never raises on a
         single bad row -- bad rows come back as ParsedRow(is_valid=False)."""

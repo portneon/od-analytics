@@ -26,10 +26,10 @@ BUSINESS_LABELS: dict[str, str] = {
 }
 
 
-def list_bounce_reasons(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> list[dict]:
+def list_bounce_reasons(db: Session, dataset_id: uuid.UUID) -> list[dict]:
     rows = db.execute(
         select(BounceReasonMetrics)
-        .where(BounceReasonMetrics.tenant_id == tenant_id, BounceReasonMetrics.dataset_id == dataset_id)
+        .where(BounceReasonMetrics.dataset_id == dataset_id)
         .order_by(BounceReasonMetrics.count.desc())
     ).scalars().all()
     return [

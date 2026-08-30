@@ -26,7 +26,6 @@ class CanonicalStatus(str, Enum):
 class CanonicalEmailEvent(BaseModel):
     """One normalized email send event, independent of source provider."""
 
-    tenant_id: str
     dataset_id: str
 
     timestamp: datetime

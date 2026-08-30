@@ -15,7 +15,6 @@ from app.core.config import settings
 
 def compute_raw_record_hash(
     *,
-    tenant_id: str,
     sender: str | None,
     recipient: str | None,
     subject: str | None,
@@ -27,7 +26,6 @@ def compute_raw_record_hash(
     bucketed = epoch - (epoch % bucket_seconds) if bucket_seconds > 0 else epoch
 
     parts = [
-        tenant_id,
         (sender or "").lower(),
         (recipient or "").lower(),
         (subject or "").strip().lower(),

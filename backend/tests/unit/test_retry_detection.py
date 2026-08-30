@@ -7,7 +7,6 @@ from app.schemas.canonical import CanonicalEmailEvent, CanonicalStatus
 def _event(minutes_offset: int, recipient="to@example.com", subject="Hello") -> CanonicalEmailEvent:
     base = datetime(2026, 7, 1, 10, 0, 0, tzinfo=timezone.utc)
     return CanonicalEmailEvent(
-        tenant_id="t1",
         dataset_id="d1",
         timestamp=base + timedelta(minutes=minutes_offset),
         sender="from@example.com",

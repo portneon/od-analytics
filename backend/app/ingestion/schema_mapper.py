@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 
 # Canonical field -> list of known source header aliases (lowercase, normalized).
-# Extend this table (or make it tenant-configurable in the DB later) rather
+# Extend this table (or make it configurable in the DB later) rather
 # than adding new hardcoded parsing branches elsewhere.
 CANONICAL_FIELD_ALIASES: dict[str, list[str]] = {
     "sender_email": ["from", "sender", "from address", "mail from", "sender email", "sent from"],

@@ -67,7 +67,7 @@ def _upsert(db: Session, model, rows: list[dict], conflict_cols: list[str]) -> N
     db.execute(stmt)
 
 
-def calculate_daily_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
+def calculate_daily_metrics(db: Session, dataset_id: uuid.UUID) -> int:
     local_ts = func.timezone(settings.DEFAULT_TIMEZONE, EmailEvent.event_time)
     date_col = cast(local_ts, Date).label("date")
     total, successful, hard, soft, failures = _status_aggregates()
@@ -75,24 +75,23 @@ def calculate_daily_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.
 
     stmt = (
         select(date_col, total, successful, hard, soft, failures, unique_recipients)
-        .where(EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id == dataset_id)
+        .where(EmailEvent.dataset_id == dataset_id)
         .group_by(date_col)
     )
     rows = []
     for date_val, total_v, succ_v, hard_v, soft_v, fail_v, uniq_v in db.execute(stmt).all():
         rows.append({
             "id": uuid.uuid4(),
-            "tenant_id": tenant_id,
             "dataset_id": dataset_id,
             "date": date_val,
             "unique_recipients": int(uniq_v or 0),
             **_row_with_rates(total_v, succ_v, hard_v, soft_v, fail_v),
         })
-    _upsert(db, DailyEmailMetrics, rows, ["tenant_id", "dataset_id", "date"])
+    _upsert(db, DailyEmailMetrics, rows, ["dataset_id", "date"])
     return len(rows)
 
 
-def calculate_hourly_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
+def calculate_hourly_metrics(db: Session, dataset_id: uuid.UUID) -> int:
     local_ts = func.timezone(settings.DEFAULT_TIMEZONE, EmailEvent.event_time)
     date_col = cast(local_ts, Date).label("date")
     hour_col = func.extract("hour", local_ts).label("hour")
@@ -100,24 +99,23 @@ def calculate_hourly_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid
 
     stmt = (
         select(date_col, hour_col, total, successful, hard, soft, failures)
-        .where(EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id == dataset_id)
+        .where(EmailEvent.dataset_id == dataset_id)
         .group_by(date_col, hour_col)
     )
     rows = []
     for date_val, hour_v, total_v, succ_v, hard_v, soft_v, fail_v in db.execute(stmt).all():
         rows.append({
             "id": uuid.uuid4(),
-            "tenant_id": tenant_id,
             "dataset_id": dataset_id,
             "date": date_val,
             "hour": int(hour_v),
             **_row_with_rates(total_v, succ_v, hard_v, soft_v, fail_v),
         })
-    _upsert(db, HourlyEmailMetrics, rows, ["tenant_id", "dataset_id", "date", "hour"])
+    _upsert(db, HourlyEmailMetrics, rows, ["dataset_id", "date", "hour"])
     return len(rows)
 
 
-def calculate_recipient_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
+def calculate_recipient_metrics(db: Session, dataset_id: uuid.UUID) -> int:
     total, successful, hard, soft, failures = _status_aggregates()
     stmt = (
         select(
@@ -129,7 +127,6 @@ def calculate_recipient_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: u
             func.count(func.distinct(EmailEvent.sender_id)).label("unique_senders"),
         )
         .where(
-            EmailEvent.tenant_id == tenant_id,
             EmailEvent.dataset_id == dataset_id,
             EmailEvent.recipient_id.is_not(None),
         )
@@ -139,7 +136,6 @@ def calculate_recipient_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: u
     for recipient_id, total_v, succ_v, hard_v, soft_v, fail_v, first_seen, last_seen, uniq_subj, uniq_send in db.execute(stmt).all():
         rows.append({
             "id": uuid.uuid4(),
-            "tenant_id": tenant_id,
             "dataset_id": dataset_id,
             "recipient_id": recipient_id,
             "first_seen": first_seen,
@@ -148,35 +144,34 @@ def calculate_recipient_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: u
             "unique_senders": int(uniq_send or 0),
             **_row_with_rates(total_v, succ_v, hard_v, soft_v, fail_v),
         })
-    _upsert(db, RecipientMetrics, rows, ["tenant_id", "dataset_id", "recipient_id"])
+    _upsert(db, RecipientMetrics, rows, ["dataset_id", "recipient_id"])
     return len(rows)
 
 
-def calculate_domain_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
+def calculate_domain_metrics(db: Session, dataset_id: uuid.UUID) -> int:
     total, successful, hard, soft, failures = _status_aggregates()
     stmt = (
         select(
             EmailEvent.domain_id, total, successful, hard, soft, failures,
             func.count(func.distinct(EmailEvent.recipient_id)).label("unique_recipients"),
         )
-        .where(EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id == dataset_id, EmailEvent.domain_id.is_not(None))
+        .where(EmailEvent.dataset_id == dataset_id, EmailEvent.domain_id.is_not(None))
         .group_by(EmailEvent.domain_id)
     )
     rows = []
     for domain_id, total_v, succ_v, hard_v, soft_v, fail_v, uniq_recip in db.execute(stmt).all():
         rows.append({
             "id": uuid.uuid4(),
-            "tenant_id": tenant_id,
             "dataset_id": dataset_id,
             "domain_id": domain_id,
             "unique_recipients": int(uniq_recip or 0),
             **_row_with_rates(total_v, succ_v, hard_v, soft_v, fail_v),
         })
-    _upsert(db, DomainMetrics, rows, ["tenant_id", "dataset_id", "domain_id"])
+    _upsert(db, DomainMetrics, rows, ["dataset_id", "domain_id"])
     return len(rows)
 
 
-def calculate_sender_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
+def calculate_sender_metrics(db: Session, dataset_id: uuid.UUID) -> int:
     total, successful, hard, soft, failures = _status_aggregates()
     stmt = (
         select(
@@ -184,30 +179,28 @@ def calculate_sender_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid
             func.count(func.distinct(EmailEvent.recipient_id)).label("unique_recipients"),
             func.count(func.distinct(EmailEvent.subject_id)).label("unique_subjects"),
         )
-        .where(EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id == dataset_id, EmailEvent.sender_id.is_not(None))
+        .where(EmailEvent.dataset_id == dataset_id, EmailEvent.sender_id.is_not(None))
         .group_by(EmailEvent.sender_id)
     )
     rows = []
     for sender_id, total_v, succ_v, hard_v, soft_v, fail_v, uniq_recip, uniq_subj in db.execute(stmt).all():
         rows.append({
             "id": uuid.uuid4(),
-            "tenant_id": tenant_id,
             "dataset_id": dataset_id,
             "sender_id": sender_id,
             "unique_recipients": int(uniq_recip or 0),
             "unique_subjects": int(uniq_subj or 0),
             **_row_with_rates(total_v, succ_v, hard_v, soft_v, fail_v),
         })
-    _upsert(db, SenderMetrics, rows, ["tenant_id", "dataset_id", "sender_id"])
+    _upsert(db, SenderMetrics, rows, ["dataset_id", "sender_id"])
     return len(rows)
 
 
-def calculate_bounce_reason_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> int:
+def calculate_bounce_reason_metrics(db: Session, dataset_id: uuid.UUID) -> int:
     count_col = func.count(EmailEvent.id)
     stmt = (
         select(EmailEvent.bounce_category, EmailEvent.bounce_code, EmailEvent.bounce_type, count_col)
         .where(
-            EmailEvent.tenant_id == tenant_id,
             EmailEvent.dataset_id == dataset_id,
             EmailEvent.bounce_type != "NONE",
         )
@@ -220,7 +213,6 @@ def calculate_bounce_reason_metrics(db: Session, tenant_id: uuid.UUID, dataset_i
     for category, code, btype, count in results:
         rows.append({
             "id": uuid.uuid4(),
-            "tenant_id": tenant_id,
             "dataset_id": dataset_id,
             "bounce_category": category.value if hasattr(category, "value") else str(category),
             "bounce_code": code,
@@ -228,20 +220,20 @@ def calculate_bounce_reason_metrics(db: Session, tenant_id: uuid.UUID, dataset_i
             "count": int(count),
             "percent_of_total": round((int(count) / total_bounces) * 100, 4),
         })
-    _upsert(db, BounceReasonMetrics, rows, ["tenant_id", "dataset_id", "bounce_category", "bounce_code"])
+    _upsert(db, BounceReasonMetrics, rows, ["dataset_id", "bounce_category", "bounce_code"])
     return len(rows)
 
 
-def _run_metric(func, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> tuple[str, int]:
+def _run_metric(func, dataset_id: uuid.UUID) -> tuple[str, int]:
     db = SessionLocal()
     try:
-        count = func(db, tenant_id, dataset_id)
+        count = func(db, dataset_id)
         db.commit()
         return func.__name__, count
     finally:
         db.close()
 
-def calculate_all_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> dict[str, int]:
+def calculate_all_metrics(db: Session, dataset_id: uuid.UUID) -> dict[str, int]:
     metrics_funcs = [
         calculate_daily_metrics,
         calculate_hourly_metrics,
@@ -250,11 +242,11 @@ def calculate_all_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UU
         calculate_sender_metrics,
         calculate_bounce_reason_metrics,
     ]
-    
+
     counts = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
         futures = {
-            executor.submit(_run_metric, func, tenant_id, dataset_id): func
+            executor.submit(_run_metric, func, dataset_id): func
             for func in metrics_funcs
         }
         for future in concurrent.futures.as_completed(futures):

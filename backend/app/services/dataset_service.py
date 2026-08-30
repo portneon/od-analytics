@@ -47,7 +47,6 @@ _DATASET_CHILD_TABLES = [
 def create_dataset(
     db: Session,
     *,
-    tenant_id: uuid.UUID,
     file_name: str,
     content: bytes,
     source: str = "zoho_mail",
@@ -62,7 +61,6 @@ def create_dataset(
         raise ApiError(status.HTTP_400_BAD_REQUEST, "UNSUPPORTED_SOURCE", f"Unsupported source '{source}'")
 
     dataset = Dataset(
-        tenant_id=tenant_id,
         name=dataset_name or file_name,
         source=source,
         file_name=file_name,
@@ -73,7 +71,7 @@ def create_dataset(
     db.flush()
 
     storage = get_storage_service()
-    file_path = storage.save(tenant_id, dataset.id, file_name, content)
+    file_path = storage.save(dataset.id, file_name, content)
     dataset.file_path = file_path
     dataset.status = DatasetStatus.QUEUED
     db.flush()
@@ -81,38 +79,35 @@ def create_dataset(
     return dataset
 
 
-def create_import_job(db: Session, *, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> ImportJob:
-    job = ImportJob(tenant_id=tenant_id, dataset_id=dataset_id, status=ImportJobStatus.QUEUED)
+def create_import_job(db: Session, *, dataset_id: uuid.UUID) -> ImportJob:
+    job = ImportJob(dataset_id=dataset_id, status=ImportJobStatus.QUEUED)
     db.add(job)
     db.flush()
     return job
 
 
-def get_dataset_or_404(db: Session, *, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> Dataset:
-    dataset = db.execute(
-        select(Dataset).where(Dataset.tenant_id == tenant_id, Dataset.id == dataset_id)
-    ).scalar_one_or_none()
+def get_dataset_or_404(db: Session, *, dataset_id: uuid.UUID) -> Dataset:
+    dataset = db.execute(select(Dataset).where(Dataset.id == dataset_id)).scalar_one_or_none()
     if dataset is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, "DATASET_NOT_FOUND", "Dataset was not found")
     return dataset
 
 
-def list_datasets(db: Session, *, tenant_id: uuid.UUID) -> list[Dataset]:
-    return list(db.execute(select(Dataset).where(Dataset.tenant_id == tenant_id).order_by(Dataset.created_at.desc())).scalars())
+def list_datasets(db: Session) -> list[Dataset]:
+    return list(db.execute(select(Dataset).order_by(Dataset.created_at.desc())).scalars())
 
 
-def delete_dataset(db: Session, *, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> None:
+def delete_dataset(db: Session, *, dataset_id: uuid.UUID) -> None:
     """Deletes a dataset and everything derived from it (events, all metrics
     tables, anomalies, import jobs) plus its stored raw file. None of the
     dataset_id FKs cascade at the DB level, so every child table is cleared
-    explicitly before the dataset row itself, tenant-scoped throughout so a
-    dataset can only ever be deleted by its own tenant."""
-    dataset = get_dataset_or_404(db, tenant_id=tenant_id, dataset_id=dataset_id)
+    explicitly before the dataset row itself."""
+    dataset = get_dataset_or_404(db, dataset_id=dataset_id)
 
     for model in _DATASET_CHILD_TABLES:
-        db.execute(delete(model).where(model.tenant_id == tenant_id, model.dataset_id == dataset_id))
+        db.execute(delete(model).where(model.dataset_id == dataset_id))
 
     db.delete(dataset)
     db.commit()
 
-    get_storage_service().delete(tenant_id, dataset_id)
+    get_storage_service().delete(dataset_id)

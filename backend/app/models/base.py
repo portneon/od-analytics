@@ -18,11 +18,3 @@ class TimestampMixin:
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-
-class TenantScopedMixin:
-    """Marks a model as tenant-owned. tenant_id column must be declared explicitly
-    on each model (so FK targets/indexes are per-model), this mixin just documents intent
-    and centralizes the convention.
-    """
-
-    __tenant_scoped__ = True

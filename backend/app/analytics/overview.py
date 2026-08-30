@@ -9,7 +9,7 @@ from app.analytics.rates import compute_rates
 from app.models.email_event import EmailEvent, EmailStatus
 
 
-def get_overview(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> dict:
+def get_overview(db: Session, dataset_id: uuid.UUID) -> dict:
     total = func.count(EmailEvent.id)
     successful = func.sum(case((EmailEvent.status == EmailStatus.SUCCESS, 1), else_=0))
     hard = func.sum(case((EmailEvent.status == EmailStatus.HARD_BOUNCE, 1), else_=0))
@@ -23,7 +23,7 @@ def get_overview(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> di
 
     stmt = select(
         total, successful, hard, soft, failures, unique_recipients, unique_senders, unique_subjects, duplicates, retries
-    ).where(EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id == dataset_id)
+    ).where(EmailEvent.dataset_id == dataset_id)
 
     row = db.execute(stmt).one()
     total_v, succ_v, hard_v, soft_v, fail_v, uniq_r, uniq_s, uniq_subj, dup_v, retry_v = (int(v or 0) for v in row)

@@ -1,5 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useAuthStore } from '@/store/authStore'
+import { NavLink, Outlet } from 'react-router-dom'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -7,15 +6,6 @@ const NAV_ITEMS = [
 ]
 
 export function AppShell() {
-  const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
-  const navigate = useNavigate()
-
-  function handleLogout() {
-    logout()
-    navigate('/login')
-  }
-
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-56 flex-col border-r border-slate-200 bg-white">
@@ -38,13 +28,6 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
-        <div className="border-t border-slate-200 p-3">
-          <p className="truncate text-xs font-medium text-slate-700">{user?.name}</p>
-          <p className="truncate text-xs text-slate-400">{user?.email}</p>
-          <button onClick={handleLogout} className="btn-secondary mt-2 w-full text-xs">
-            Log out
-          </button>
-        </div>
       </aside>
       <main className="flex-1 overflow-x-hidden bg-slate-50">
         <Outlet />

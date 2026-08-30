@@ -43,7 +43,6 @@ def _contribution_breakdown(db: Session, base_filters: list, group_col, count_on
 
 def analyze_root_cause(
     db: Session,
-    tenant_id: uuid.UUID,
     dataset_id: uuid.UUID,
     *,
     metric: str = "bounce_rate",
@@ -52,7 +51,6 @@ def analyze_root_cause(
     failure_statuses = _FAILURE_STATUSES_BY_METRIC.get(metric, _FAILURE_STATUSES_BY_METRIC["bounce_rate"])
 
     filters = [
-        EmailEvent.tenant_id == tenant_id,
         EmailEvent.dataset_id == dataset_id,
         EmailEvent.status.in_(failure_statuses),
     ]
@@ -69,8 +67,8 @@ def analyze_root_cause(
             "note": "No affected events found for the given metric/period; no root-cause breakdown available.",
         }
 
-    domain_names = {d.id: d.domain for d in db.execute(select(Domain).where(Domain.tenant_id == tenant_id)).scalars()}
-    subject_names = {s.id: s.subject for s in db.execute(select(Subject).where(Subject.tenant_id == tenant_id)).scalars()}
+    domain_names = {d.id: d.domain for d in db.execute(select(Domain)).scalars()}
+    subject_names = {s.id: s.subject for s in db.execute(select(Subject)).scalars()}
 
     dimensions: list[dict] = []
 

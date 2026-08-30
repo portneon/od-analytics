@@ -34,10 +34,9 @@ class _RatesMixin:
 
 class DailyEmailMetrics(Base, _RatesMixin):
     __tablename__ = "daily_email_metrics"
-    __table_args__ = (UniqueConstraint("tenant_id", "dataset_id", "date", name="uq_daily_metrics"),)
+    __table_args__ = (UniqueConstraint("dataset_id", "date", name="uq_daily_metrics"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
     date: Mapped[date] = mapped_column(Date, index=True)
     unique_recipients: Mapped[int] = mapped_column(Integer, default=0)
@@ -46,10 +45,9 @@ class DailyEmailMetrics(Base, _RatesMixin):
 
 class HourlyEmailMetrics(Base, _RatesMixin):
     __tablename__ = "hourly_email_metrics"
-    __table_args__ = (UniqueConstraint("tenant_id", "dataset_id", "date", "hour", name="uq_hourly_metrics"),)
+    __table_args__ = (UniqueConstraint("dataset_id", "date", "hour", name="uq_hourly_metrics"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
     date: Mapped[date] = mapped_column(Date, index=True)
     hour: Mapped[int] = mapped_column(Integer)
@@ -58,10 +56,9 @@ class HourlyEmailMetrics(Base, _RatesMixin):
 
 class RecipientMetrics(Base, _RatesMixin):
     __tablename__ = "recipient_metrics"
-    __table_args__ = (UniqueConstraint("tenant_id", "dataset_id", "recipient_id", name="uq_recipient_metrics"),)
+    __table_args__ = (UniqueConstraint("dataset_id", "recipient_id", name="uq_recipient_metrics"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
     recipient_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("recipients.id"), index=True)
 
@@ -79,10 +76,9 @@ class RecipientMetrics(Base, _RatesMixin):
 
 class DomainMetrics(Base, _RatesMixin):
     __tablename__ = "domain_metrics"
-    __table_args__ = (UniqueConstraint("tenant_id", "dataset_id", "domain_id", name="uq_domain_metrics"),)
+    __table_args__ = (UniqueConstraint("dataset_id", "domain_id", name="uq_domain_metrics"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
     domain_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("domains.id"), index=True)
     unique_recipients: Mapped[int] = mapped_column(Integer, default=0)
@@ -91,10 +87,9 @@ class DomainMetrics(Base, _RatesMixin):
 
 class SubjectMetrics(Base, _RatesMixin):
     __tablename__ = "subject_metrics"
-    __table_args__ = (UniqueConstraint("tenant_id", "dataset_id", "subject_id", name="uq_subject_metrics"),)
+    __table_args__ = (UniqueConstraint("dataset_id", "subject_id", name="uq_subject_metrics"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
     subject_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("subjects.id"), index=True)
     unique_recipients: Mapped[int] = mapped_column(Integer, default=0)
@@ -103,10 +98,9 @@ class SubjectMetrics(Base, _RatesMixin):
 
 class SenderMetrics(Base, _RatesMixin):
     __tablename__ = "sender_metrics"
-    __table_args__ = (UniqueConstraint("tenant_id", "dataset_id", "sender_id", name="uq_sender_metrics"),)
+    __table_args__ = (UniqueConstraint("dataset_id", "sender_id", name="uq_sender_metrics"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
     sender_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("senders.id"), index=True)
     unique_recipients: Mapped[int] = mapped_column(Integer, default=0)
@@ -117,11 +111,10 @@ class SenderMetrics(Base, _RatesMixin):
 class BounceReasonMetrics(Base):
     __tablename__ = "bounce_reason_metrics"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "dataset_id", "bounce_category", "bounce_code", name="uq_bounce_reason_metrics"),
+        UniqueConstraint("dataset_id", "bounce_category", "bounce_code", name="uq_bounce_reason_metrics"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
     bounce_category: Mapped[str] = mapped_column(String(50))
     bounce_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -136,11 +129,10 @@ class InfrastructureMetrics(Base, _RatesMixin):
 
     __tablename__ = "infrastructure_metrics"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "dataset_id", "component_type", "component_value", name="uq_infra_metrics"),
+        UniqueConstraint("dataset_id", "component_type", "component_value", name="uq_infra_metrics"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
     component_type: Mapped[str] = mapped_column(String(20))  # remote_mta | relay_server | remote_ip
     component_value: Mapped[str] = mapped_column(String(255))
@@ -152,10 +144,9 @@ class ApplicationMetrics(Base, _RatesMixin):
     """Aggregates by application/workflow category derived from subject classification."""
 
     __tablename__ = "application_metrics"
-    __table_args__ = (UniqueConstraint("tenant_id", "dataset_id", "category", name="uq_application_metrics"),)
+    __table_args__ = (UniqueConstraint("dataset_id", "category", name="uq_application_metrics"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
     category: Mapped[str] = mapped_column(String(100))
     unique_recipients: Mapped[int] = mapped_column(Integer, default=0)

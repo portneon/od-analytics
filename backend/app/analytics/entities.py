@@ -23,7 +23,6 @@ def list_entity_metrics(
     dimension_model,
     dimension_id_col_name: str,
     name_col: str,
-    tenant_id: uuid.UUID,
     dataset_id: uuid.UUID,
     page: int = 1,
     page_size: int | None = None,
@@ -41,7 +40,7 @@ def list_entity_metrics(
     base_stmt: Select = (
         select(metrics_model, name_col_obj)
         .join(dimension_model, dimension_id_col == dimension_model.id)
-        .where(metrics_model.tenant_id == tenant_id, metrics_model.dataset_id == dataset_id)
+        .where(metrics_model.dataset_id == dataset_id)
     )
 
     total = db.execute(select(func.count()).select_from(base_stmt.subquery())).scalar_one()

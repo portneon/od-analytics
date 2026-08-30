@@ -1,7 +1,7 @@
 """Subject -> application/workflow category classification.
 
 Ships with sensible default keyword rules (evaluated in order, first match
-wins) but every tenant can override/extend via `ApplicationCategoryRule`
+wins) but they can be overridden/extended via `ApplicationCategoryRule`
 rows -- this module never hardcodes the category list as the only
 possibility, it's just the out-of-the-box default.
 """

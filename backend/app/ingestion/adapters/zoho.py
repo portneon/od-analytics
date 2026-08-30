@@ -55,7 +55,7 @@ class ZohoAdapter(SourceAdapter):
         return detect_schema(columns)
 
     def parse(
-        self, df: pl.DataFrame, mapping: SchemaMapping, *, tenant_id: str, dataset_id: str
+        self, df: pl.DataFrame, mapping: SchemaMapping, *, dataset_id: str
     ) -> Iterator[ParsedRow]:
         col = mapping.field_to_column
 
@@ -169,7 +169,6 @@ class ZohoAdapter(SourceAdapter):
                 is_valid = recipient is not None and is_valid_email(recipient) and timestamp is not None
 
                 event = CanonicalEmailEvent(
-                    tenant_id=tenant_id,
                     dataset_id=dataset_id,
                     timestamp=timestamp or datetime(1970, 1, 1, tzinfo=timezone.utc),
                     sender=sender,

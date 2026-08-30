@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 from app.models.metrics import ApplicationMetrics
 
 
-def list_application_metrics(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> list[dict]:
+def list_application_metrics(db: Session, dataset_id: uuid.UUID) -> list[dict]:
     rows = db.execute(
         select(ApplicationMetrics)
-        .where(ApplicationMetrics.tenant_id == tenant_id, ApplicationMetrics.dataset_id == dataset_id)
+        .where(ApplicationMetrics.dataset_id == dataset_id)
         .order_by(ApplicationMetrics.total_emails.desc())
     ).scalars().all()
     return [

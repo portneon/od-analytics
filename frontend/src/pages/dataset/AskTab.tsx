@@ -1,8 +1,47 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { Components } from 'react-markdown'
 import { askQuestion } from '@/services/ai'
 import type { AskResult } from '@/types/api'
+
+const MARKDOWN_COMPONENTS: Components = {
+  p: ({ children }) => <p className="mb-2 text-sm text-slate-700 last:mb-0">{children}</p>,
+  h1: ({ children }) => <h1 className="mb-2 mt-3 text-base font-semibold text-slate-900 first:mt-0">{children}</h1>,
+  h2: ({ children }) => <h2 className="mb-2 mt-3 text-sm font-semibold text-slate-900 first:mt-0">{children}</h2>,
+  h3: ({ children }) => <h3 className="mb-1 mt-2 text-sm font-semibold text-slate-800 first:mt-0">{children}</h3>,
+  ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-1 text-sm text-slate-700 last:mb-0">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-1 text-sm text-slate-700 last:mb-0">{children}</ol>,
+  li: ({ children }) => <li className="pl-0.5">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  a: ({ children, href }) => (
+    <a className="text-slate-900 underline underline-offset-2 hover:text-slate-600" href={href} target="_blank" rel="noreferrer">
+      {children}
+    </a>
+  ),
+  code: ({ children }) => <code className="rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800">{children}</code>,
+  pre: ({ children }) => <pre className="mb-2 overflow-auto rounded bg-slate-50 p-3 text-xs text-slate-700 last:mb-0">{children}</pre>,
+  blockquote: ({ children }) => (
+    <blockquote className="mb-2 border-l-2 border-slate-200 pl-3 text-sm italic text-slate-500 last:mb-0">{children}</blockquote>
+  ),
+  hr: () => <hr className="my-3 border-slate-200" />,
+  table: ({ children }) => (
+    <div className="mb-2 overflow-auto last:mb-0">
+      <table className="table-base">{children}</table>
+    </div>
+  ),
+}
+
+function AnswerMarkdown({ text }: { text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+      {text}
+    </ReactMarkdown>
+  )
+}
 
 const SUGGESTED_QUESTIONS = [
   'Why did failures increase?',
@@ -59,7 +98,7 @@ export function AskTab() {
                   AI narrative unavailable — showing underlying data directly.
                 </p>
               )}
-              <p className="whitespace-pre-wrap text-sm text-slate-700">{entry.result.answer}</p>
+              <AnswerMarkdown text={entry.result.answer} />
               {entry.result.tool_calls.length > 0 && (
                 <details className="mt-3">
                   <summary className="cursor-pointer text-xs font-medium text-slate-400">

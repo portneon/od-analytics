@@ -2,9 +2,9 @@
 
 The LLM only ever sees these schemas -- it can request a tool call, but the
 actual query is always executed by app.ai.tools.executor against the real
-database, scoped to the tenant_id/dataset_id fixed by the API request (never
-supplied by the LLM). This is what prevents the AI from fabricating numbers
-or crossing tenant boundaries.
+database, scoped to the dataset_id fixed by the API request (never supplied
+by the LLM). This is what prevents the AI from fabricating numbers or
+querying outside the current dataset.
 """
 from __future__ import annotations
 

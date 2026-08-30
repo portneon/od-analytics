@@ -14,10 +14,10 @@ from app.models.metrics import DailyEmailMetrics, HourlyEmailMetrics
 _DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
-def get_daily_timeline(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> list[dict]:
+def get_daily_timeline(db: Session, dataset_id: uuid.UUID) -> list[dict]:
     stmt = (
         select(DailyEmailMetrics)
-        .where(DailyEmailMetrics.tenant_id == tenant_id, DailyEmailMetrics.dataset_id == dataset_id)
+        .where(DailyEmailMetrics.dataset_id == dataset_id)
         .order_by(DailyEmailMetrics.date)
     )
     rows = db.execute(stmt).scalars().all()
@@ -38,11 +38,9 @@ def get_daily_timeline(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID)
     ]
 
 
-def get_hourly_timeline(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> list[dict]:
+def get_hourly_timeline(db: Session, dataset_id: uuid.UUID) -> list[dict]:
     """Aggregated across all days in the dataset, bucketed by hour-of-day (0-23)."""
-    stmt = select(HourlyEmailMetrics).where(
-        HourlyEmailMetrics.tenant_id == tenant_id, HourlyEmailMetrics.dataset_id == dataset_id
-    )
+    stmt = select(HourlyEmailMetrics).where(HourlyEmailMetrics.dataset_id == dataset_id)
     rows = db.execute(stmt).scalars().all()
 
     buckets: dict[int, dict[str, int]] = defaultdict(lambda: {"total_emails": 0, "successful": 0, "hard_bounces": 0, "soft_bounces": 0, "failures": 0})
@@ -62,7 +60,7 @@ def get_hourly_timeline(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID
     return result
 
 
-def get_day_of_week_timeline(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> list[dict]:
+def get_day_of_week_timeline(db: Session, dataset_id: uuid.UUID) -> list[dict]:
     local_ts = func.timezone(settings.DEFAULT_TIMEZONE, EmailEvent.event_time)
     dow_col = extract("isodow", local_ts).label("dow")  # 1=Monday .. 7=Sunday
     total = func.count(EmailEvent.id)
@@ -78,7 +76,7 @@ def get_day_of_week_timeline(db: Session, tenant_id: uuid.UUID, dataset_id: uuid
 
     stmt = (
         select(dow_col, total, successful, hard, soft, failures)
-        .where(EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id == dataset_id)
+        .where(EmailEvent.dataset_id == dataset_id)
         .group_by(dow_col)
     )
     by_dow = {int(row[0]): row[1:] for row in db.execute(stmt).all()}

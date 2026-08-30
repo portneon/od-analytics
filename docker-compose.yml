@@ -15,16 +15,6 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
@@ -43,7 +33,6 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg2://email_intel:email_intel@postgres:5432/email_intel
-      REDIS_URL: redis://redis:6379/0
       STORAGE_ENDPOINT: http://minio:9000
       STORAGE_USE_LOCAL_FS: "false"
       CORS_ORIGINS: http://localhost:5173
@@ -55,29 +44,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
-
-  worker:
-    build:
-      context: ./backend
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql+psycopg2://email_intel:email_intel@postgres:5432/email_intel
-      REDIS_URL: redis://redis:6379/0
-      STORAGE_ENDPOINT: http://minio:9000
-      STORAGE_USE_LOCAL_FS: "false"
-    volumes:
-      - ./backend:/app
-      - ./data:/app/data
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A app.workers.celery_app worker --loglevel=info
 
   frontend:
     build:

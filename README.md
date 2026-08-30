@@ -6,9 +6,10 @@ bounce analysis, recipient risk scoring, anomaly detection, root-cause analysis,
 natural-language "ask your data" reporting.
 
 This is not a CSV viewer. Raw events are normalized into a canonical schema, persisted
-in a multi-tenant Postgres database, aggregated into materialized metrics tables, and
-served through a deterministic analytics/intelligence engine that an AI layer can query
-via tools — but never fabricate numbers for.
+in Postgres, aggregated into materialized metrics tables, and served through a
+deterministic analytics/intelligence engine that an AI layer can query via tools — but
+never fabricate numbers for. It's a single-user tool: no login, no accounts, no
+per-tenant isolation — anyone who can reach the API can see and upload data.
 
 ## Project overview
 
@@ -19,7 +20,7 @@ Zoho Mail CSV
 Ingestion (upload, validate) ─▶ Raw file storage (local fs / S3-compatible)
      │
      ▼
-ETL (Celery job): parse → normalize → enrich → classify bounces → dedupe → persist
+ETL (FastAPI BackgroundTask): parse → normalize → enrich → classify bounces → dedupe → persist
      │
      ▼
 PostgreSQL (canonical email_events + dimension tables)
@@ -32,7 +33,7 @@ PostgreSQL (canonical email_events + dimension tables)
      └──▶ Root-cause analysis / executive insights
      │
      ▼
-FastAPI (versioned REST API, tenant-scoped)
+FastAPI (versioned REST API, no auth)
      │
      ├──▶ React dashboard (Vite + TS + Tailwind + TanStack Query + Recharts)
      └──▶ AI Analyst (tool-calling LLM, provider-agnostic; degrades gracefully with no key)
@@ -45,7 +46,6 @@ See [docs/architecture.md](docs/architecture.md) for the full write-up.
 - Python 3.12+
 - Node.js 20+
 - PostgreSQL 16+ (local install or Docker)
-- Redis 7+ (local install or Docker)
 - Docker + Docker Compose (recommended for one-command local dev)
 
 ## Quick start (Docker Compose)
@@ -55,8 +55,8 @@ cp .env.example .env
 docker compose up
 ```
 
-This starts Postgres, Redis, MinIO, the FastAPI backend (with migrations applied
-automatically), a Celery worker, and the React frontend. Visit:
+This starts Postgres, MinIO, the FastAPI backend (with migrations applied
+automatically), and the React frontend. Visit:
 
 - Frontend: http://localhost:5173
 - API docs: http://localhost:8000/docs
@@ -67,10 +67,10 @@ automatically), a Celery worker, and the React frontend. Visit:
 scripts/run.sh
 ```
 
-Starts Postgres/Redis/MinIO in Docker, then runs the backend, Celery worker, and
-frontend as local processes (not containerized) so they hot-reload against your
-working tree. Sets up the backend venv, `npm install`, `.env` files, and DB migrations
-on first run. Logs go to `data/logs/`; Ctrl+C stops everything.
+Starts Postgres/MinIO in Docker, then runs the backend and frontend as local processes
+(not containerized) so they hot-reload against your working tree. Sets up the backend
+venv, `npm install`, `.env` files, and DB migrations on first run. Logs go to
+`data/logs/`; Ctrl+C stops everything.
 
 ## Manual local setup
 
@@ -81,22 +81,14 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp ../.env.example .env   # edit DATABASE_URL etc. if not using Docker Postgres/Redis
+cp ../.env.example .env   # edit DATABASE_URL etc. if not using Docker Postgres
 
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-In a second terminal, run the background worker (required for dataset processing):
-
-```bash
-source .venv/bin/activate
-celery -A app.workers.celery_app worker --loglevel=info
-```
-
-For quick local testing without Redis/a worker process, set
-`CELERY_TASK_ALWAYS_EAGER=true` in `.env` — uploads then process synchronously in the
-request path. **Not recommended for anything beyond quick manual smoke testing.**
+Dataset processing runs inline via FastAPI `BackgroundTasks` — no separate worker
+process or broker needed.
 
 ### Frontend
 
@@ -127,10 +119,8 @@ See [.env.example](.env.example) for the full list. Key ones:
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Postgres connection string |
-| `REDIS_URL` | Celery broker/result backend |
 | `STORAGE_USE_LOCAL_FS` | `true` for local filesystem raw storage, `false` for S3/MinIO |
 | `LLM_PROVIDER` / `LLM_API_KEY` / `LLM_MODEL` | AI Analyst provider. `LLM_PROVIDER=none` (default) runs the AI Analyst in a safe fallback mode — no key required |
-| `JWT_SECRET` | Auth token signing secret — change in production |
 | `DEFAULT_TIMEZONE` | Timezone used for daily/hourly bucketing (default `Asia/Kolkata`) |
 
 ## Database setup
@@ -154,8 +144,7 @@ pytest --cov=app tests/       # with coverage
 
 Integration tests run against a dedicated `email_intel_test` Postgres database (create
 it once: `createdb email_intel_test`, or point `DATABASE_URL` in your test environment
-at any disposable Postgres instance) and run Celery in eager mode, so no Redis/worker
-is required to run the suite.
+at any disposable Postgres instance).
 
 ## API documentation
 
@@ -171,29 +160,31 @@ documented in [docs/api.md](docs/api.md).
 
 See [docs/deployment.md](docs/deployment.md). In short: build `backend/Dockerfile` and
 `frontend/Dockerfile.prod` (nginx-served static build), run Alembic migrations as a
-release step, run at least one Celery worker process, and point `STORAGE_USE_LOCAL_FS`
-at a real S3-compatible bucket.
+release step, and point `STORAGE_USE_LOCAL_FS` at a real S3-compatible bucket. The API
+has no authentication — only deploy it somewhere not reachable by the public internet,
+or put it behind your own access control (e.g. a reverse proxy with basic auth, or a
+private network).
 
 ## Troubleshooting
 
-- **Uploads stay `QUEUED` forever** — no Celery worker is running, or it can't reach
-  Redis. Check `REDIS_URL` and that a `celery -A app.workers.celery_app worker` process
-  is up.
 - **`INVALID_FILE` on upload** — file isn't `.csv`, is empty, or exceeds
   `MAX_UPLOAD_FILE_SIZE_BYTES`.
 - **AI Analyst says "AI narrative generation is unavailable"** — no `LLM_API_KEY` is
   configured. This is expected, not a bug — the platform never fabricates a narrative
   when no LLM is configured; it shows the same underlying data the narrative would have
   been built from.
-- **`bcrypt` / password hashing errors** — this repo pins `bcrypt==4.0.1` alongside
-  `passlib==1.7.4`; newer `bcrypt` releases break passlib's backend detection.
 
 ## Further reading
 
 - [docs/architecture.md](docs/architecture.md) — system architecture and design decisions
-- [docs/database.md](docs/database.md) — schema, multi-tenancy, indexing
+- [docs/database.md](docs/database.md) — schema and indexing
 - [docs/ingestion.md](docs/ingestion.md) — canonical schema, adapters, ETL pipeline
 - [docs/analytics.md](docs/analytics.md) — metrics, aggregation, intelligence engine
 - [docs/ai.md](docs/ai.md) — AI Analyst architecture and safety guarantees
 - [docs/api.md](docs/api.md) — API reference
 - [docs/deployment.md](docs/deployment.md) — production deployment guide
+
+> **Note:** the docs above still describe the platform's earlier multi-tenant/
+> authenticated design in places (JWT auth, `tenant_id` scoping, Celery workers). The
+> app itself, this README, and the deployment docs have been updated for the current
+> single-user architecture; the deeper architecture docs are due for a follow-up pass.

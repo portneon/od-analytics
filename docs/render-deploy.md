@@ -7,22 +7,26 @@ This repo's [`render.yaml`](../render.yaml) provisions a **zero-cost** stack:
   [Neon](https://neon.tech)'s free tier instead: persistent Postgres, no
   auto-deletion (the project pauses after inactivity and wakes on the next
   query — no data loss).
-- **Backend**: one free Render web service. No separate Celery worker and no
-  Redis — Render's background workers have **no free tier** ($7/mo minimum).
-  Instead, `CELERY_TASK_ALWAYS_EAGER=true` makes ingestion tasks run inline
-  in the same request/process.
+- **Backend**: one free Render web service. No separate worker and no
+  Redis/broker — Render's background workers have **no free tier** ($7/mo
+  minimum). Ingestion runs via FastAPI `BackgroundTasks` inline in the same
+  request/process instead.
 - **Frontend**: a free Render static site.
 
-No credit card is required for any of this.
+No credit card is required for any of this. Note this deploys the API with
+**no authentication** — anyone with the URL can view and upload data. Fine
+for personal/occasional use with non-sensitive data; put it behind your own
+access control (reverse proxy with basic auth, IP allowlist, etc.) if that's
+not acceptable for what you're uploading.
 
 ## Trade-offs of the free shape
 
 - The backend spins down after 15 min idle; the next request eats a ~1 min
   cold start.
-- CSV uploads process synchronously (eager mode) instead of being queued —
-  a large upload blocks the request until it finishes. Fine for occasional/
-  personal use; revisit (paid worker + Redis, or `render.yaml`'s original
-  worker-based version) if uploads get large or frequent.
+- CSV uploads process via a background task attached to the same request/
+  process — a large upload ties up that instance until processing finishes.
+  Fine for occasional/personal use; revisit (a paid worker + queue) if
+  uploads get large or frequent.
 - Local filesystem storage is ephemeral: fine because the backend is the
   only process touching it, but raw uploaded CSVs won't survive a redeploy
   or a cold-start container recycle. The parsed data already committed to
@@ -65,8 +69,8 @@ the real URLs Render assigned:
 
 - `GET https://<backend-url>/health` → 200 (expect a ~1 min cold start if
   the service had been idle).
-- Log in via the frontend, upload a CSV, confirm it processes (the request
-  will hang until processing finishes — that's the eager-mode trade-off).
+- Open the frontend, upload a CSV, confirm it processes (the request will
+  hang until processing finishes — that's the background-task trade-off).
 
 ## Staying within free limits
 
@@ -77,8 +81,7 @@ the real URLs Render assigned:
 
 ## If you outgrow this later
 
-Switch back to the worker-based architecture: a paid Render background
-worker + Redis (Key Value), and real S3-compatible object storage instead
-of local disk (needed once backend and worker are separate containers
-again). See `docs/deployment.md` for the production configuration this
-scales up to.
+Move to a worker-based architecture: a paid Render background worker plus a
+queue (Redis or similar), and real S3-compatible object storage instead of
+local disk (needed once backend and worker are separate containers). See
+`docs/deployment.md` for the production configuration this scales up to.

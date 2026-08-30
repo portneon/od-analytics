@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import csv
 import io
-import uuid
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -24,14 +23,14 @@ from app.intelligence.insights import generate_executive_insights
 from app.models.dataset import Dataset
 
 
-def build_report_data(db: Session, tenant_id: uuid.UUID, dataset: Dataset) -> dict:
+def build_report_data(db: Session, dataset: Dataset) -> dict:
     dataset_id = dataset.id
-    overview = overview_analytics.get_overview(db, tenant_id, dataset_id)
-    top_recipients = recipients_analytics.list_recipients(db, tenant_id, dataset_id, page=1, page_size=10, sort_by="failure_rate")["items"]
-    top_domains = domains_analytics.list_domains(db, tenant_id, dataset_id, page=1, page_size=10, sort_by="bounce_rate")["items"]
-    top_subjects = subjects_analytics.list_subjects(db, tenant_id, dataset_id, page=1, page_size=10, sort_by="failure_rate")["items"]
-    bounce_reasons = bounces_analytics.list_bounce_reasons(db, tenant_id, dataset_id)
-    insights = generate_executive_insights(db, tenant_id, dataset_id)
+    overview = overview_analytics.get_overview(db, dataset_id)
+    top_recipients = recipients_analytics.list_recipients(db, dataset_id, page=1, page_size=10, sort_by="failure_rate")["items"]
+    top_domains = domains_analytics.list_domains(db, dataset_id, page=1, page_size=10, sort_by="bounce_rate")["items"]
+    top_subjects = subjects_analytics.list_subjects(db, dataset_id, page=1, page_size=10, sort_by="failure_rate")["items"]
+    bounce_reasons = bounces_analytics.list_bounce_reasons(db, dataset_id)
+    insights = generate_executive_insights(db, dataset_id)
 
     recommendations: list[str] = []
     for insight in insights:

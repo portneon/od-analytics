@@ -14,25 +14,25 @@ from app.core.config import settings
 
 
 class StorageService:
-    def save(self, tenant_id: uuid.UUID, dataset_id: uuid.UUID, file_name: str, content: bytes) -> str:
+    def save(self, dataset_id: uuid.UUID, file_name: str, content: bytes) -> str:
         raise NotImplementedError
 
-    def delete(self, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> None:
+    def delete(self, dataset_id: uuid.UUID) -> None:
         raise NotImplementedError
 
 
 class LocalFileStorage(StorageService):
-    def save(self, tenant_id: uuid.UUID, dataset_id: uuid.UUID, file_name: str, content: bytes) -> str:
-        base = Path(settings.LOCAL_STORAGE_PATH) / str(tenant_id) / str(dataset_id)
+    def save(self, dataset_id: uuid.UUID, file_name: str, content: bytes) -> str:
+        base = Path(settings.LOCAL_STORAGE_PATH) / str(dataset_id)
         base.mkdir(parents=True, exist_ok=True)
         target = base / file_name
         target.write_bytes(content)
         return str(target)
 
-    def delete(self, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> None:
+    def delete(self, dataset_id: uuid.UUID) -> None:
         import shutil
 
-        base = Path(settings.LOCAL_STORAGE_PATH) / str(tenant_id) / str(dataset_id)
+        base = Path(settings.LOCAL_STORAGE_PATH) / str(dataset_id)
         shutil.rmtree(base, ignore_errors=True)
 
 
@@ -50,13 +50,13 @@ class S3CompatibleStorage(StorageService):
         except Exception:  # noqa: BLE001 - bucket may already exist; creation is best-effort
             pass
 
-    def save(self, tenant_id: uuid.UUID, dataset_id: uuid.UUID, file_name: str, content: bytes) -> str:
-        key = f"{tenant_id}/{dataset_id}/{file_name}"
+    def save(self, dataset_id: uuid.UUID, file_name: str, content: bytes) -> str:
+        key = f"{dataset_id}/{file_name}"
         self._client.put_object(Bucket=self._bucket, Key=key, Body=content)
         return f"s3://{self._bucket}/{key}"
 
-    def delete(self, tenant_id: uuid.UUID, dataset_id: uuid.UUID) -> None:
-        prefix = f"{tenant_id}/{dataset_id}/"
+    def delete(self, dataset_id: uuid.UUID) -> None:
+        prefix = f"{dataset_id}/"
         try:
             objects = self._client.list_objects_v2(Bucket=self._bucket, Prefix=prefix)
             for obj in objects.get("Contents", []):

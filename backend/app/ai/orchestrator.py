@@ -57,8 +57,8 @@ def _fallback_tool_and_args(question: str) -> tuple[str, dict]:
     return "get_overview", {}
 
 
-def ask_question(db: Session, *, tenant_id: uuid.UUID, dataset_id: uuid.UUID, question: str) -> dict:
-    executor = build_executor(db, tenant_id, dataset_id)
+def ask_question(db: Session, *, dataset_id: uuid.UUID, question: str) -> dict:
+    executor = build_executor(db, dataset_id)
     provider = get_llm_provider()
 
     try:

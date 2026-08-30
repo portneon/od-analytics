@@ -62,7 +62,7 @@ def parse_timestamp(value: str | None) -> datetime | None:
     timestamps are plain local wall-clock time. A naive result here would
     later be handed to Postgres, whose interpretation of "naive" depends on
     the server's own session TimeZone GUC, which has no guaranteed relation
-    to the tenant's actual timezone (settings.DEFAULT_TIMEZONE) -- in most
+    to the configured timezone (settings.DEFAULT_TIMEZONE) -- in most
     real deployments (cloud Postgres defaults to UTC) that mismatch would
     silently shift every daily/hourly/day-of-week bucket. So: localize here,
     in Python, once, and only trust an offset already present in the source

@@ -1,11 +1,11 @@
 """Background jobs.
 
-`process_dataset_task` runs the full pipeline stages sequentially in one
-Celery task (INGEST -> CLASSIFY [inline in ingestion] -> CALCULATE_METRICS ->
-CALCULATE_RECIPIENT_RISK -> DETECT_ANOMALIES). They're logically separate
-stages (and logged/tracked as such via ImportJob progress) but chained in one
-task rather than split into a Celery chain of 5 separate queued jobs --
-simpler operationally for a single-dataset import, with no loss of
+`process_dataset_task` runs the full pipeline stages sequentially
+(INGEST -> CLASSIFY [inline in ingestion] -> CALCULATE_METRICS ->
+CALCULATE_RECIPIENT_RISK -> DETECT_ANOMALIES) via FastAPI's BackgroundTasks.
+They're logically separate stages (and logged/tracked as such via ImportJob
+progress) but chained in one task rather than split into separate queued
+jobs -- simpler operationally for a single-dataset import, with no loss of
 observability since each stage's row counts are logged and any stage
 failure still marks the whole job FAILED with the responsible stage in the
 error message.
@@ -23,13 +23,11 @@ from app.ingestion.pipeline import run_ingestion_pipeline
 from app.intelligence.anomaly_detection import detect_anomalies
 from app.intelligence.risk_scoring import calculate_recipient_risk
 from app.models.dataset import Dataset, DatasetStatus, ImportJob, ImportJobStatus
-from app.workers.celery_app import celery_app
 
 logger = get_logger(__name__)
 
 
-@celery_app.task(name="process_dataset", bind=True, max_retries=0)
-def process_dataset_task(self, dataset_id: str, import_job_id: str) -> dict:
+def process_dataset_task(dataset_id: str, import_job_id: str) -> dict:
     db = SessionLocal()
     stage = "initialization"
     try:
@@ -44,9 +42,7 @@ def process_dataset_task(self, dataset_id: str, import_job_id: str) -> dict:
         db.commit()
 
         stage = "ingestion"
-        result = run_ingestion_pipeline(
-            db, tenant_id=dataset.tenant_id, dataset_id=dataset.id, file_path=dataset.file_path, source=dataset.source
-        )
+        result = run_ingestion_pipeline(db, dataset_id=dataset.id, file_path=dataset.file_path, source=dataset.source)
 
         dataset.row_count = result.total_rows
         dataset.date_start = result.date_start
@@ -60,15 +56,15 @@ def process_dataset_task(self, dataset_id: str, import_job_id: str) -> dict:
         db.commit()
 
         stage = "calculate_metrics"
-        calculate_all_metrics(db, dataset.tenant_id, dataset.id)
+        calculate_all_metrics(db, dataset.id)
         db.commit()
 
         stage = "calculate_recipient_risk"
-        calculate_recipient_risk(db, dataset.tenant_id, dataset.id)
+        calculate_recipient_risk(db, dataset.id)
         db.commit()
 
         stage = "detect_anomalies"
-        detect_anomalies(db, dataset.tenant_id, dataset.id)
+        detect_anomalies(db, dataset.id)
         db.commit()
 
         # Zero valid events (e.g. a file whose columns don't map to the
@@ -95,7 +91,7 @@ def process_dataset_task(self, dataset_id: str, import_job_id: str) -> dict:
         db.rollback()
         _mark_failed(db, dataset_id, import_job_id, f"[{stage}] {exc}")
         raise
-    except Exception as exc:  # noqa: BLE001 - job failure must be recorded, then re-raised for Celery/logs
+    except Exception as exc:  # noqa: BLE001 - job failure must be recorded, then re-raised for logs
         db.rollback()
         _mark_failed(db, dataset_id, import_job_id, f"[{stage}] {exc}")
         logger.error("dataset.processing.failed", dataset_id=dataset_id, stage=stage, error=str(exc))

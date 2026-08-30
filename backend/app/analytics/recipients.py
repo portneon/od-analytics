@@ -12,14 +12,13 @@ from app.models.email_event import EmailEvent
 from app.models.metrics import RecipientMetrics
 
 
-def list_recipients(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID, **kwargs) -> dict:
+def list_recipients(db: Session, dataset_id: uuid.UUID, **kwargs) -> dict:
     result = list_entity_metrics(
         db,
         metrics_model=RecipientMetrics,
         dimension_model=Recipient,
         dimension_id_col_name="recipient_id",
         name_col="email",
-        tenant_id=tenant_id,
         dataset_id=dataset_id,
         extra_fields={
             "risk_score": "risk_score",
@@ -40,16 +39,13 @@ def list_recipients(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID, **
     return result
 
 
-def get_recipient_profile(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID, recipient_id: uuid.UUID) -> dict | None:
-    recipient = db.execute(
-        select(Recipient).where(Recipient.tenant_id == tenant_id, Recipient.id == recipient_id)
-    ).scalar_one_or_none()
+def get_recipient_profile(db: Session, dataset_id: uuid.UUID, recipient_id: uuid.UUID) -> dict | None:
+    recipient = db.execute(select(Recipient).where(Recipient.id == recipient_id)).scalar_one_or_none()
     if recipient is None:
         return None
 
     metrics = db.execute(
         select(RecipientMetrics).where(
-            RecipientMetrics.tenant_id == tenant_id,
             RecipientMetrics.dataset_id == dataset_id,
             RecipientMetrics.recipient_id == recipient_id,
         )
@@ -57,7 +53,7 @@ def get_recipient_profile(db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UU
 
     timeline_rows = db.execute(
         select(EmailEvent)
-        .where(EmailEvent.tenant_id == tenant_id, EmailEvent.dataset_id == dataset_id, EmailEvent.recipient_id == recipient_id)
+        .where(EmailEvent.dataset_id == dataset_id, EmailEvent.recipient_id == recipient_id)
         .order_by(EmailEvent.event_time.desc())
         .limit(settings.MAX_PAGE_SIZE)
     ).scalars().all()

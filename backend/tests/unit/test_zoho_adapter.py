@@ -10,7 +10,7 @@ def _parse(rows: list[list[str]]):
     df = pl.DataFrame(rows, schema=COLUMNS, orient="row")
     adapter = ZohoAdapter()
     mapping = detect_schema(COLUMNS)
-    return list(adapter.parse(df, mapping, tenant_id="t1", dataset_id="d1"))
+    return list(adapter.parse(df, mapping, dataset_id="d1"))
 
 
 def test_comma_separated_recipients_fan_out_into_multiple_valid_events():

@@ -1,10 +1,7 @@
 import os
-import uuid
 
 os.environ["APP_ENV"] = "test"
 os.environ.setdefault("DATABASE_URL", "postgresql+psycopg2://email_intel:email_intel@localhost:5432/email_intel_test")
-os.environ["CELERY_TASK_ALWAYS_EAGER"] = "true"
-os.environ["JWT_SECRET"] = "test-secret"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,9 +11,6 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 from app.core.database import Base, get_db
 from app.main import app
-from app.models.tenant import Tenant
-from app.models.user import User, UserRole
-from app.core.security import hash_password
 
 engine = create_engine(settings.DATABASE_URL, future=True)
 TestSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
@@ -58,27 +52,3 @@ def client(db_session):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def tenant(db_session):
-    t = Tenant(name="Test Co", slug=f"test-co-{uuid.uuid4().hex[:8]}")
-    db_session.add(t)
-    db_session.flush()
-    return t
-
-
-@pytest.fixture
-def user(db_session, tenant):
-    u = User(tenant_id=tenant.id, email="admin@test.com", name="Admin", role=UserRole.ADMIN, password_hash=hash_password("password123"))
-    db_session.add(u)
-    db_session.flush()
-    return u
-
-
-@pytest.fixture
-def auth_headers(user):
-    from app.core.security import create_access_token
-
-    token = create_access_token(user_id=user.id, tenant_id=user.tenant_id, role=user.role.value)
-    return {"Authorization": f"Bearer {token}"}

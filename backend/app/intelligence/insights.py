@@ -31,17 +31,18 @@ _METRIC_TITLES = {
 
 
 def generate_executive_insights(
-    db: Session, tenant_id: uuid.UUID, dataset_id: uuid.UUID | None = None, limit: int = 5
+    db: Session, dataset_id: uuid.UUID | None = None, limit: int = 5
 ) -> list[dict]:
-    """dataset_id=None scans anomalies across every dataset for the tenant
-    (the cross-dataset executive dashboard); each insight then also carries
-    its dataset_id so the caller can link back to the right dataset."""
-    conditions = [Anomaly.tenant_id == tenant_id]
+    """dataset_id=None scans anomalies across every dataset (the cross-dataset
+    executive dashboard); each insight then also carries its dataset_id so
+    the caller can link back to the right dataset."""
+    conditions = []
     if dataset_id is not None:
         conditions.append(Anomaly.dataset_id == dataset_id)
-    anomalies = list(
-        db.execute(select(Anomaly).where(*conditions).order_by(Anomaly.detected_at.desc())).scalars()
-    )
+    stmt = select(Anomaly)
+    if conditions:
+        stmt = stmt.where(*conditions)
+    anomalies = list(db.execute(stmt.order_by(Anomaly.detected_at.desc())).scalars())
     anomalies.sort(key=lambda a: (_SEVERITY_ORDER.get(a.severity, 9), -abs(a.deviation)))
 
     insights = []
@@ -55,7 +56,7 @@ def generate_executive_insights(
         contributors = []
         if anomaly.entity_type == "overall" and anomaly.metric in ("bounce_rate", "failure_rate"):
             on_date = anomaly.period_start.date() if hasattr(anomaly.period_start, "date") else anomaly.period_start
-            root_cause = analyze_root_cause(db, tenant_id, anomaly.dataset_id, metric=anomaly.metric, on_date=on_date)
+            root_cause = analyze_root_cause(db, anomaly.dataset_id, metric=anomaly.metric, on_date=on_date)
             for dim in root_cause.get("dimensions", [])[:2]:
                 for c in dim["contributors"][:2]:
                     contributors.append({

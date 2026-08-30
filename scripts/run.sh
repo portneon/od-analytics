@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Single entry point for local dev: brings up Postgres/Redis/MinIO via Docker Compose,
-# then runs the backend API, Celery worker, and frontend dev server as local processes
+# Single entry point for local dev: brings up Postgres/MinIO via Docker Compose,
+# then runs the backend API and frontend dev server as local processes
 # (not Docker) so they hot-reload against your working tree.
 #
 # Usage: scripts/run.sh
@@ -21,19 +21,16 @@ cleanup() {
     kill "$pid" 2>/dev/null || true
   done
   wait 2>/dev/null || true
-  (cd "$ROOT_DIR" && docker compose stop postgres redis minio) >/dev/null 2>&1 || true
+  (cd "$ROOT_DIR" && docker compose stop postgres minio) >/dev/null 2>&1 || true
   echo "Stopped."
 }
 trap cleanup EXIT INT TERM
 
-echo "==> Starting Postgres, Redis, MinIO (Docker Compose)"
-(cd "$ROOT_DIR" && docker compose up -d postgres redis minio)
+echo "==> Starting Postgres, MinIO (Docker Compose)"
+(cd "$ROOT_DIR" && docker compose up -d postgres minio)
 
-echo "==> Waiting for Postgres/Redis to be healthy"
+echo "==> Waiting for Postgres to be healthy"
 until [ "$(cd "$ROOT_DIR" && docker compose ps -q postgres | xargs docker inspect -f '{{.State.Health.Status}}')" = "healthy" ]; do
-  sleep 1
-done
-until [ "$(cd "$ROOT_DIR" && docker compose ps -q redis | xargs docker inspect -f '{{.State.Health.Status}}')" = "healthy" ]; do
   sleep 1
 done
 
@@ -66,11 +63,6 @@ echo "==> Starting backend API (log: data/logs/backend.log)"
   >"$LOG_DIR/backend.log" 2>&1 &
 PIDS+=($!)
 
-echo "==> Starting Celery worker (log: data/logs/worker.log)"
-(cd "$ROOT_DIR/backend" && ./.venv/bin/celery -A app.workers.celery_app worker --loglevel=info) \
-  >"$LOG_DIR/worker.log" 2>&1 &
-PIDS+=($!)
-
 echo "==> Starting frontend dev server (log: data/logs/frontend.log)"
 (cd "$ROOT_DIR/frontend" && npm run dev -- --host 0.0.0.0) \
   >"$LOG_DIR/frontend.log" 2>&1 &
@@ -84,7 +76,7 @@ Running:
   API       http://localhost:8000/docs
   MinIO     http://localhost:9001  (minioadmin / minioadmin)
 
-Logs: tail -f data/logs/{backend,worker,frontend}.log
+Logs: tail -f data/logs/{backend,frontend}.log
 Press Ctrl+C to stop everything.
 EOF
 

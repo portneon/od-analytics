@@ -60,15 +60,13 @@ class EmailEvent(Base):
 
     __tablename__ = "email_events"
     __table_args__ = (
-        Index("ix_email_events_tenant_dataset_time", "tenant_id", "dataset_id", "event_time"),
-        Index("ix_email_events_tenant_status", "tenant_id", "status"),
-        Index("ix_email_events_tenant_recipient", "tenant_id", "recipient_id"),
-        Index("ix_email_events_tenant_domain", "tenant_id", "domain_id"),
-        Index("ix_email_events_tenant_hash", "tenant_id", "raw_record_hash"),
+        # The single-column indexes here (status, recipient_id, domain_id,
+        # raw_record_hash) are already covered by index=True on those
+        # columns below -- only the composite index needs to be explicit.
+        Index("ix_email_events_dataset_time", "dataset_id", "event_time"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("datasets.id"), index=True)
 
     event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
