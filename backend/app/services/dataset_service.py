@@ -6,8 +6,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.deps import ApiError
-from app.ingestion.csv_loader import CsvValidationError, validate_upload
-from app.ingestion.registry import available_sources
+from app.ingestion.csv_loader import CsvValidationError, sniff_header, validate_upload
+from app.ingestion.registry import available_sources, detect_source
 from app.models.anomaly import Anomaly
 from app.models.dataset import Dataset, DatasetStatus, ImportJob, ImportJobStatus
 from app.models.email_event import EmailEvent
@@ -50,6 +50,7 @@ def create_dataset(
     file_name: str,
     content: bytes,
     source: str = "zoho_mail",
+    is_whatsapp: bool = False,
     dataset_name: str | None = None,
 ) -> Dataset:
     try:
@@ -60,9 +61,17 @@ def create_dataset(
     if source not in available_sources():
         raise ApiError(status.HTTP_400_BAD_REQUEST, "UNSUPPORTED_SOURCE", f"Unsupported source '{source}'")
 
+    # `is_whatsapp` is an explicit declaration from the upload form -- it
+    # always wins over sniffing. Otherwise (the upload form today never
+    # sends anything but the bare "zoho_mail" default) sniff the file's own
+    # header row to route it to the right adapter instead of always
+    # assuming Zoho.
+    effective_default = "whatsapp_gateway" if is_whatsapp else source
+    detected_source = detect_source(sniff_header(content), default=effective_default)
+
     dataset = Dataset(
         name=dataset_name or file_name,
-        source=source,
+        source=detected_source,
         file_name=file_name,
         file_path="",  # set after storage below
         status=DatasetStatus.UPLOADING,

@@ -5,16 +5,17 @@ import { deleteDataset } from '@/services/datasets'
 import { DatasetStatusBadge } from '@/components/Badges'
 import { LoadingState, ErrorState } from '@/components/Feedback'
 import { formatDate, formatNumber } from '@/utils/format'
+import { channelLabels } from '@/utils/channel'
 
 const TABS = [
   { to: '', label: 'Overview', end: true },
   { to: 'analytics', label: 'Analytics' },
   { to: 'recipients', label: 'Recipients' },
-  { to: 'domains', label: 'Domains' },
+  { to: 'domains', label: 'Domains', requires: 'hasDomains' as const },
   { to: 'subjects', label: 'Subjects' },
   { to: 'senders', label: 'Senders' },
-  { to: 'bounces', label: 'Bounces' },
-  { to: 'infrastructure', label: 'Infrastructure' },
+  { to: 'bounces', label: 'Bounces', requires: 'hasBounceClassification' as const },
+  { to: 'infrastructure', label: 'Infrastructure', requires: 'hasInfrastructure' as const },
   { to: 'anomalies', label: 'Anomalies' },
   { to: 'events', label: 'Events' },
   { to: 'ask', label: 'AI Analyst' },
@@ -45,13 +46,18 @@ export function DatasetLayout() {
   if (error || !dataset) return <ErrorState message="Could not load this dataset." onRetry={() => refetch()} />
 
   const isProcessing = dataset.status === 'UPLOADING' || dataset.status === 'QUEUED' || dataset.status === 'PROCESSING'
+  const labels = channelLabels(dataset.source)
+  const tabs = TABS.filter((tab) => !tab.requires || labels[tab.requires])
 
   return (
     <div className="flex h-full flex-col">
       <header className="border-b border-slate-200 bg-white px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">{dataset.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-slate-900">{dataset.name}</h1>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{labels.badge}</span>
+            </div>
             <p className="mt-0.5 text-xs text-slate-400">
               {dataset.file_name} · {formatDate(dataset.date_start)} – {formatDate(dataset.date_end)} · {formatNumber(dataset.row_count)} rows
             </p>
@@ -73,7 +79,7 @@ export function DatasetLayout() {
           </p>
         )}
         <nav className="mt-4 flex gap-1 overflow-x-auto">
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <NavLink
               key={tab.to}
               to={tab.to}

@@ -1,14 +1,18 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getRecipientProfile } from '@/services/analytics'
 import { StatTile, rateTone } from '@/components/StatTile'
 import { RiskBadge, StatusBadge } from '@/components/Badges'
 import { LoadingState, ErrorState } from '@/components/Feedback'
 import { formatDateTime, formatPercent } from '@/utils/format'
+import { channelLabels } from '@/utils/channel'
+import type { Dataset } from '@/types/api'
 
 export function RecipientDetailPage() {
   const { datasetId, recipientId } = useParams()
   const navigate = useNavigate()
+  const { dataset } = useOutletContext<{ dataset: Dataset }>()
+  const labels = channelLabels(dataset.source)
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['recipient-profile', datasetId, recipientId],
@@ -30,7 +34,7 @@ export function RecipientDetailPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">{data.email}</h1>
-          <p className="text-sm text-slate-400">{data.domain}</p>
+          {data.domain && <p className="text-sm text-slate-400">{data.domain}</p>}
         </div>
         {m && <RiskBadge level={m.risk_level} />}
       </div>
@@ -38,7 +42,7 @@ export function RecipientDetailPage() {
       {m && (
         <>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <StatTile label="Total Emails" value={m.total_emails} />
+            <StatTile label={`Total ${labels.unitPlural}`} value={m.total_emails} />
             <StatTile label="Delivery Rate" value={formatPercent(m.delivery_rate)} tone={rateTone(m.delivery_rate, 'delivery')} />
             <StatTile label="Bounce Rate" value={formatPercent(m.bounce_rate)} tone={rateTone(m.bounce_rate, 'bounce')} />
             <StatTile label="Risk Score" value={`${m.risk_score} / 100`} tone={rateTone(m.risk_score, 'bounce')} />

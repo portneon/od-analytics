@@ -25,11 +25,15 @@ from app.models.dataset import Dataset
 
 def build_report_data(db: Session, dataset: Dataset) -> dict:
     dataset_id = dataset.id
+    channel = "whatsapp" if dataset.source == "whatsapp_gateway" else "email"
     overview = overview_analytics.get_overview(db, dataset_id)
     top_recipients = recipients_analytics.list_recipients(db, dataset_id, page=1, page_size=10, sort_by="failure_rate")["items"]
-    top_domains = domains_analytics.list_domains(db, dataset_id, page=1, page_size=10, sort_by="bounce_rate")["items"]
+    # WhatsApp phone numbers have no domain concept, and WhatsApp delivery
+    # outcomes are never classified as SMTP bounces -- both legitimately
+    # come back empty for that channel, not as an error.
+    top_domains = [] if channel == "whatsapp" else domains_analytics.list_domains(db, dataset_id, page=1, page_size=10, sort_by="bounce_rate")["items"]
     top_subjects = subjects_analytics.list_subjects(db, dataset_id, page=1, page_size=10, sort_by="failure_rate")["items"]
-    bounce_reasons = bounces_analytics.list_bounce_reasons(db, dataset_id)
+    bounce_reasons = [] if channel == "whatsapp" else bounces_analytics.list_bounce_reasons(db, dataset_id)
     insights = generate_executive_insights(db, dataset_id)
 
     recommendations: list[str] = []
@@ -41,6 +45,7 @@ def build_report_data(db: Session, dataset: Dataset) -> dict:
         recommendations.append("No significant issues detected in this dataset.")
 
     return {
+        "channel": channel,
         "dataset": {
             "id": str(dataset.id),
             "name": dataset.name,
@@ -88,33 +93,49 @@ def render_pdf(report: dict) -> bytes:
     styles = getSampleStyleSheet()
     story = []
 
+    is_whatsapp = report.get("channel") == "whatsapp"
+    unit_label = "Messages" if is_whatsapp else "Emails"
+    channel_label = "WhatsApp" if is_whatsapp else "Email"
+
     ds = report["dataset"]
-    story.append(Paragraph(f"Executive Email Report — {ds['name']}", styles["Title"]))
+    story.append(Paragraph(f"Executive {channel_label} Report — {ds['name']}", styles["Title"]))
     story.append(Paragraph(f"Period: {ds.get('date_start') or 'N/A'} to {ds.get('date_end') or 'N/A'} · {ds.get('row_count') or 0} events", styles["Normal"]))
     story.append(Spacer(1, 0.5 * cm))
 
     ov = report["overview"]
     story.append(Paragraph("Overview", styles["Heading2"]))
     overview_table = [
-        ["Total Emails", "Unique Recipients", "Delivery Rate", "Bounce Rate", "Failure Rate"],
+        [f"Total {unit_label}", "Unique Recipients", "Delivery Rate", "Bounce Rate", "Failure Rate"],
         [str(ov["total_emails"]), str(ov["unique_recipients"]), f"{ov['delivery_rate']}%", f"{ov['bounce_rate']}%", f"{ov['failure_rate']}%"],
     ]
     story.append(_styled_table(overview_table))
     story.append(Spacer(1, 0.5 * cm))
 
-    story.append(Paragraph("Top Problem Domains", styles["Heading2"]))
-    story.append(_entity_table(report["top_problem_domains"], "name"))
-    story.append(Spacer(1, 0.5 * cm))
+    # Domains and SMTP-style bounce classification don't exist for a
+    # phone-number-addressed channel like WhatsApp -- the section is
+    # dropped rather than rendered as a confusing, permanently-empty table.
+    if report["top_problem_domains"]:
+        story.append(Paragraph("Top Problem Domains", styles["Heading2"]))
+        story.append(_entity_table(report["top_problem_domains"], "name"))
+        story.append(Spacer(1, 0.5 * cm))
 
     story.append(Paragraph("Top Problem Recipients", styles["Heading2"]))
     story.append(_entity_table(report["top_problem_recipients"], "name"))
     story.append(Spacer(1, 0.5 * cm))
 
-    story.append(Paragraph("Bounce Reasons", styles["Heading2"]))
-    bounce_rows = [["Category", "Count", "% of bounces"]] + [
-        [b["business_label"], str(b["count"]), f"{b['percent_of_total']}%"] for b in report["bounce_reasons"][:10]
-    ]
-    story.append(_styled_table(bounce_rows))
+    if is_whatsapp:
+        story.append(Paragraph("Delivery Failures", styles["Heading2"]))
+        story.append(Paragraph(
+            "WhatsApp delivery failures aren't classified into SMTP-style bounce categories — "
+            "see the Events tab filtered to the FAILED status for individual failure reasons.",
+            styles["Normal"],
+        ))
+    elif report["bounce_reasons"]:
+        story.append(Paragraph("Bounce Reasons", styles["Heading2"]))
+        bounce_rows = [["Category", "Count", "% of bounces"]] + [
+            [b["business_label"], str(b["count"]), f"{b['percent_of_total']}%"] for b in report["bounce_reasons"][:10]
+        ]
+        story.append(_styled_table(bounce_rows))
     story.append(Spacer(1, 0.5 * cm))
 
     story.append(Paragraph("Key Insights", styles["Heading2"]))
@@ -161,6 +182,7 @@ def _styled_table(rows: list[list[str]]) -> Table:
 
 
 def render_csv(report: dict) -> str:
+    is_whatsapp = report.get("channel") == "whatsapp"
     buffer = io.StringIO()
     writer = csv.writer(buffer)
 
@@ -169,11 +191,15 @@ def render_csv(report: dict) -> str:
         writer.writerow(["Overview", key, value])
     writer.writerow([])
 
-    writer.writerow(["Top Problem Domains"])
-    writer.writerow(["Domain", "Total", "Delivery Rate", "Bounce Rate", "Failure Rate"])
-    for d in report["top_problem_domains"]:
-        writer.writerow([d["name"], d["total_emails"], d["delivery_rate"], d["bounce_rate"], d["failure_rate"]])
-    writer.writerow([])
+    # Domains and SMTP-style bounce classification don't exist for a
+    # phone-number-addressed channel like WhatsApp -- the section is
+    # dropped rather than written out as a permanently-empty table.
+    if report["top_problem_domains"]:
+        writer.writerow(["Top Problem Domains"])
+        writer.writerow(["Domain", "Total", "Delivery Rate", "Bounce Rate", "Failure Rate"])
+        for d in report["top_problem_domains"]:
+            writer.writerow([d["name"], d["total_emails"], d["delivery_rate"], d["bounce_rate"], d["failure_rate"]])
+        writer.writerow([])
 
     writer.writerow(["Top Problem Recipients"])
     writer.writerow(["Recipient", "Total", "Delivery Rate", "Bounce Rate", "Failure Rate", "Risk Score"])
@@ -181,11 +207,19 @@ def render_csv(report: dict) -> str:
         writer.writerow([r["name"], r["total_emails"], r["delivery_rate"], r["bounce_rate"], r["failure_rate"], r.get("risk_score")])
     writer.writerow([])
 
-    writer.writerow(["Bounce Reasons"])
-    writer.writerow(["Category", "Business Label", "Count", "% of Bounces"])
-    for b in report["bounce_reasons"]:
-        writer.writerow([b["bounce_category"], b["business_label"], b["count"], b["percent_of_total"]])
-    writer.writerow([])
+    if is_whatsapp:
+        writer.writerow(["Delivery Failures"])
+        writer.writerow([
+            "WhatsApp delivery failures aren't classified into SMTP-style bounce categories "
+            "-- see the Events export filtered to the FAILED status for individual failure reasons."
+        ])
+        writer.writerow([])
+    elif report["bounce_reasons"]:
+        writer.writerow(["Bounce Reasons"])
+        writer.writerow(["Category", "Business Label", "Count", "% of Bounces"])
+        for b in report["bounce_reasons"]:
+            writer.writerow([b["bounce_category"], b["business_label"], b["count"], b["percent_of_total"]])
+        writer.writerow([])
 
     writer.writerow(["Key Insights"])
     writer.writerow(["Severity", "Title", "Metric", "Observed", "Baseline", "Change %", "Explanation", "Contributors"])

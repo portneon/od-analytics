@@ -10,6 +10,7 @@ from dateutil import parser as date_parser
 from app.core.config import settings
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_PHONE_RE = re.compile(r"^\+?\d{7,15}$")
 _DEFAULT_TZ = ZoneInfo(settings.DEFAULT_TIMEZONE)
 
 # Timestamp formats tried in order before falling back to dateutil's fuzzy parser.
@@ -49,6 +50,19 @@ def is_valid_email(value: str | None) -> bool:
     if not value:
         return False
     return bool(_EMAIL_RE.match(value))
+
+
+def normalize_phone(value: str | None) -> str | None:
+    value = normalize_empty(value)
+    if value is None:
+        return None
+    return re.sub(r"[\s\-()]", "", value)
+
+
+def is_valid_phone(value: str | None) -> bool:
+    if not value:
+        return False
+    return bool(_PHONE_RE.match(value))
 
 
 def extract_domain(email: str | None) -> str | None:

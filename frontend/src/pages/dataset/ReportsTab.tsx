@@ -1,9 +1,13 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useOutletContext } from 'react-router-dom'
 import { generateReport } from '@/services/datasets'
+import { channelLabels } from '@/utils/channel'
+import type { Dataset } from '@/types/api'
 
 export function ReportsTab() {
   const { datasetId } = useParams()
+  const { dataset } = useOutletContext<{ dataset: Dataset }>()
+  const labels = channelLabels(dataset.source)
   const [downloading, setDownloading] = useState<'pdf' | 'csv' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -15,7 +19,7 @@ export function ReportsTab() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `email-intelligence-report.${format}`
+      a.download = `${labels.badge.toLowerCase()}-intelligence-report.${format}`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -32,7 +36,9 @@ export function ReportsTab() {
       <div className="card p-6">
         <h2 className="text-sm font-semibold text-slate-700">Executive Report</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Includes overview metrics, top problem domains &amp; recipients, bounce analysis, and recommendations.
+          {labels.hasDomains
+            ? 'Includes overview metrics, top problem domains & recipients, bounce analysis, and recommendations.'
+            : 'Includes overview metrics, top problem recipients, delivery-failure analysis, and recommendations.'}
         </p>
         <div className="mt-4 flex gap-2">
           <button className="btn-primary" onClick={() => handleDownload('pdf')} disabled={downloading !== null}>

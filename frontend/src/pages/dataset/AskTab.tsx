@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useOutletContext } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
 import { askQuestion } from '@/services/ai'
-import type { AskResult } from '@/types/api'
+import type { AskResult, Dataset } from '@/types/api'
+import { channelLabels } from '@/utils/channel'
 
 const MARKDOWN_COMPONENTS: Components = {
   p: ({ children }) => <p className="mb-2 text-sm text-slate-700 last:mb-0">{children}</p>,
@@ -43,11 +44,19 @@ function AnswerMarkdown({ text }: { text: string }) {
   )
 }
 
-const SUGGESTED_QUESTIONS = [
+const SUGGESTED_QUESTIONS_EMAIL = [
   'Why did failures increase?',
   'Which domain has the highest bounce rate?',
   'Show me the top problematic recipients',
   'Which subjects have the highest failure rate?',
+  'Which application workflow generates the most failures?',
+]
+
+const SUGGESTED_QUESTIONS_WHATSAPP = [
+  'Why did failures increase?',
+  'Which recipient has the highest failure rate?',
+  'Show me the top problematic recipients',
+  'Which templates have the highest failure rate?',
   'Which application workflow generates the most failures?',
 ]
 
@@ -58,6 +67,8 @@ interface ConversationEntry {
 
 export function AskTab() {
   const { datasetId } = useParams()
+  const { dataset } = useOutletContext<{ dataset: Dataset }>()
+  const suggestedQuestions = channelLabels(dataset.source).hasDomains ? SUGGESTED_QUESTIONS_EMAIL : SUGGESTED_QUESTIONS_WHATSAPP
   const [question, setQuestion] = useState('')
   const [history, setHistory] = useState<ConversationEntry[]>([])
 
@@ -79,7 +90,7 @@ export function AskTab() {
           <p className="text-sm font-medium text-slate-700">Ask your data</p>
           <p className="mt-1 text-sm text-slate-400">Ask a question in plain language. Every number comes directly from this dataset.</p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {SUGGESTED_QUESTIONS.map((q) => (
+            {suggestedQuestions.map((q) => (
               <button key={q} className="btn-secondary text-xs" onClick={() => handleAsk(q)}>
                 {q}
               </button>

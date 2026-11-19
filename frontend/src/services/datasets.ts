@@ -23,10 +23,11 @@ export async function deleteDataset(id: string) {
   return res.data.data
 }
 
-export async function uploadDataset(file: File, name: string, onProgress?: (pct: number) => void) {
+export async function uploadDataset(file: File, name: string, onProgress?: (pct: number) => void, isWhatsapp?: boolean) {
   const form = new FormData()
   form.append('file', file)
   if (name) form.append('name', name)
+  if (isWhatsapp) form.append('is_whatsapp', 'true')
   const res = await apiClient.post<ApiSuccess<{ dataset_id: string; job_id: string; status: string; task_id: string }>>(
     '/datasets/upload',
     form,
@@ -41,13 +42,14 @@ export async function uploadDataset(file: File, name: string, onProgress?: (pct:
   return res.data.data
 }
 
-export async function uploadDatasets(files: File[], onProgress?: (pct: number) => void) {
+export async function uploadDatasets(files: File[], onProgress?: (pct: number) => void, isWhatsapp?: boolean) {
   if (files.length === 0) throw new Error('No files provided')
   if (files.length === 1) {
-    return uploadDataset(files[0], files[0].name.replace(/\.csv$/i, ''), onProgress)
+    return uploadDataset(files[0], files[0].name.replace(/\.csv$/i, ''), onProgress, isWhatsapp)
   }
   const form = new FormData()
   files.forEach((f) => form.append('files', f))
+  if (isWhatsapp) form.append('is_whatsapp', 'true')
   const res = await apiClient.post<ApiSuccess<{ dataset_id?: string; datasets?: { dataset_id: string }[]; count?: number }>>(
     '/datasets/upload',
     form,

@@ -42,7 +42,7 @@ CANONICAL_FIELD_ALIASES: dict[str, list[str]] = {
 REQUIRED_CANONICAL_FIELDS = {"sender_email", "recipient_email", "event_time"}
 
 
-def _normalize_header(header: str) -> str:
+def normalize_header(header: str) -> str:
     h = header.strip().lower()
     h = re.sub(r"[_\-]+", " ", h)
     h = re.sub(r"\s+", " ", h)
@@ -75,7 +75,7 @@ def detect_schema(source_columns: list[str]) -> SchemaMapping:
 
     mapping = SchemaMapping()
     for column in source_columns:
-        normalized = _normalize_header(column)
+        normalized = normalize_header(column)
         canonical_field = alias_lookup.get(normalized)
         if canonical_field and canonical_field not in mapping.field_to_column:
             mapping.column_to_field[column] = canonical_field

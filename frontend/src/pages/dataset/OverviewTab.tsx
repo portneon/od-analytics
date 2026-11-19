@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getOverview, getDailyTimeline, getInsights, listEntities } from '@/services/analytics'
 import { StatTile, rateTone } from '@/components/StatTile'
@@ -7,11 +7,15 @@ import { ChartCard } from '@/components/ChartCard'
 import { LoadingState, ErrorState, EmptyState } from '@/components/Feedback'
 import { SeverityBadge } from '@/components/Badges'
 import { formatNumber, formatPercent } from '@/utils/format'
+import { channelLabels } from '@/utils/channel'
+import type { Dataset } from '@/types/api'
 import { DataQualityCard } from './DataQualityCard'
 
 export function OverviewTab() {
   const { datasetId } = useParams()
   const navigate = useNavigate()
+  const { dataset } = useOutletContext<{ dataset: Dataset }>()
+  const labels = channelLabels(dataset.source)
 
   const overview = useQuery({ queryKey: ['overview', datasetId], queryFn: () => getOverview(datasetId!), enabled: !!datasetId })
   const timeline = useQuery({ queryKey: ['daily-timeline', datasetId], queryFn: () => getDailyTimeline(datasetId!), enabled: !!datasetId })
@@ -19,7 +23,7 @@ export function OverviewTab() {
   const topDomains = useQuery({
     queryKey: ['top-domains', datasetId],
     queryFn: () => listEntities(datasetId!, 'domains', { sort_by: 'bounce_rate', page_size: 5 }),
-    enabled: !!datasetId,
+    enabled: !!datasetId && labels.hasDomains,
   })
   const topRecipients = useQuery({
     queryKey: ['top-recipients', datasetId],
@@ -35,7 +39,7 @@ export function OverviewTab() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        <StatTile label="Total Emails" value={formatNumber(ov.total_emails)} />
+        <StatTile label={`Total ${labels.unitPlural}`} value={formatNumber(ov.total_emails)} />
         <StatTile label="Unique Recipients" value={formatNumber(ov.unique_recipients)} />
         <StatTile label="Delivery Rate" value={formatPercent(ov.delivery_rate)} tone={rateTone(ov.delivery_rate, 'delivery')} />
         <StatTile label="Hard Bounce" value={formatPercent((ov.hard_bounces / ov.total_emails) * 100 || 0)} tone={rateTone(ov.bounce_rate, 'bounce')} />
@@ -49,7 +53,7 @@ export function OverviewTab() {
         </div>
       ) : (
         timeline.data && (
-          <ChartCard title="Email Volume Trend">
+          <ChartCard title={labels.volumeTrend}>
             {(expanded) => <TimelineChart data={timeline.data} height={expanded ? 500 : 280} />}
           </ChartCard>
         )
@@ -93,21 +97,23 @@ export function OverviewTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="card overflow-hidden">
-          <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Top Problem Domains</h2>
-          <table className="table-base">
-            <tbody>
-              {topDomains.data?.items.map((d) => (
-                <tr key={d.id} className="cursor-pointer" onClick={() => navigate(`domains/${d.id}`)}>
-                  <td className="font-medium text-slate-700">{d.name}</td>
-                  <td>{formatNumber(d.total_emails)} emails</td>
-                  <td className="text-red-600">{formatPercent(d.bounce_rate)} bounce</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className={`grid grid-cols-1 gap-4 ${labels.hasDomains ? 'lg:grid-cols-2' : ''}`}>
+        {labels.hasDomains && (
+          <div className="card overflow-hidden">
+            <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Top Problem Domains</h2>
+            <table className="table-base">
+              <tbody>
+                {topDomains.data?.items.map((d) => (
+                  <tr key={d.id} className="cursor-pointer" onClick={() => navigate(`domains/${d.id}`)}>
+                    <td className="font-medium text-slate-700">{d.name}</td>
+                    <td>{formatNumber(d.total_emails)} {labels.unitLower}</td>
+                    <td className="text-red-600">{formatPercent(d.bounce_rate)} bounce</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="card overflow-hidden">
           <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Top Problem Recipients</h2>
           <table className="table-base">
@@ -115,7 +121,7 @@ export function OverviewTab() {
               {topRecipients.data?.items.map((r) => (
                 <tr key={r.id} className="cursor-pointer" onClick={() => navigate(`recipients/${r.id}`)}>
                   <td className="font-medium text-slate-700">{r.name}</td>
-                  <td>{formatNumber(r.total_emails)} emails</td>
+                  <td>{formatNumber(r.total_emails)} {labels.unitLower}</td>
                   <td className="text-red-600">{formatPercent(r.bounce_rate)} bounce</td>
                 </tr>
               ))}

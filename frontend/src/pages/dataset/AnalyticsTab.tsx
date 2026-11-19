@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom'
+import { useParams, useOutletContext } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getDailyTimeline, getHourlyTimeline, getDayOfWeekTimeline, getApplicationMetrics } from '@/services/analytics'
 import { TimelineChart } from '@/charts/TimelineChart'
@@ -6,9 +6,13 @@ import { RateBarChart } from '@/charts/RateBarChart'
 import { ChartCard } from '@/components/ChartCard'
 import { LoadingState, ErrorState } from '@/components/Feedback'
 import { formatNumber, formatPercent } from '@/utils/format'
+import { channelLabels } from '@/utils/channel'
+import type { Dataset } from '@/types/api'
 
 export function AnalyticsTab() {
   const { datasetId } = useParams()
+  const { dataset } = useOutletContext<{ dataset: Dataset }>()
+  const labels = channelLabels(dataset.source)
 
   const daily = useQuery({ queryKey: ['daily-timeline', datasetId], queryFn: () => getDailyTimeline(datasetId!), enabled: !!datasetId })
   const hourly = useQuery({ queryKey: ['hourly-timeline', datasetId], queryFn: () => getHourlyTimeline(datasetId!), enabled: !!datasetId })
@@ -34,7 +38,7 @@ export function AnalyticsTab() {
                 data={hourly.data}
                 xKey="hour"
                 yKey="total_emails"
-                label="Emails"
+                label={labels.unitPlural}
                 color="#334155"
                 xFormatter={(h) => `${h}:00`}
                 height={expanded ? 500 : 220}
@@ -45,7 +49,7 @@ export function AnalyticsTab() {
         {dow.data && (
           <ChartCard title="Volume by Day of Week">
             {(expanded) => (
-              <RateBarChart data={dow.data} xKey="day_of_week" yKey="total_emails" label="Emails" color="#475569" height={expanded ? 500 : 220} />
+              <RateBarChart data={dow.data} xKey="day_of_week" yKey="total_emails" label={labels.unitPlural} color="#475569" height={expanded ? 500 : 220} />
             )}
           </ChartCard>
         )}
@@ -59,7 +63,7 @@ export function AnalyticsTab() {
           <thead>
             <tr>
               <th>Category</th>
-              <th>Emails</th>
+              <th>{labels.unitPlural}</th>
               <th>Delivery Rate</th>
               <th>Bounce Rate</th>
               <th>Failure Rate</th>

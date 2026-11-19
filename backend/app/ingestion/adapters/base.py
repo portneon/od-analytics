@@ -18,6 +18,13 @@ from app.schemas.canonical import ParsedRow
 class SourceAdapter(ABC):
     source_name: str
 
+    # Normalized (see schema_mapper.normalize_header) source headers that are
+    # distinctive of this provider's export format. Used by the registry to
+    # auto-detect which adapter a freshly uploaded CSV belongs to, when the
+    # caller hasn't explicitly chosen a source. Left empty for the default
+    # fallback adapter (zoho_mail) since it never needs to "win" detection.
+    signature_columns: frozenset[str] = frozenset()
+
     @abstractmethod
     def detect(self, columns: list[str]) -> SchemaMapping:
         """Map source columns to canonical fields."""

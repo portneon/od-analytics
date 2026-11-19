@@ -5,6 +5,7 @@ import { deleteDataset, listDatasets, uploadDatasets } from '@/services/datasets
 import { DatasetStatusBadge } from '@/components/Badges'
 import { LoadingState, ErrorState, EmptyState } from '@/components/Feedback'
 import { formatDate, formatNumber } from '@/utils/format'
+import { channelLabels } from '@/utils/channel'
 
 export function DatasetsPage() {
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ['datasets'], queryFn: listDatasets, refetchInterval: 5000 })
@@ -13,9 +14,10 @@ export function DatasetsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [uploadCount, setUploadCount] = useState<number>(0)
+  const [isWhatsapp, setIsWhatsapp] = useState(false)
 
   const uploadMutation = useMutation({
-    mutationFn: ({ files }: { files: File[] }) => uploadDatasets(files, setUploadProgress),
+    mutationFn: ({ files }: { files: File[] }) => uploadDatasets(files, setUploadProgress, isWhatsapp),
     onSuccess: (result: any) => {
       setUploadProgress(null)
       queryClient.invalidateQueries({ queryKey: ['datasets'] })
@@ -51,13 +53,17 @@ export function DatasetsPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Datasets</h1>
-          <p className="text-sm text-slate-400">Upload one or multiple Zoho Mail export CSVs to generate executive analytics.</p>
+          <p className="text-sm text-slate-400">Upload one or multiple Zoho Mail or WhatsApp gateway export CSVs to generate executive analytics.</p>
         </div>
-        <div>
+        <div className="flex flex-col items-end gap-2">
           <input ref={fileInputRef} type="file" accept=".csv" multiple className="hidden" onChange={handleFileChange} />
           <button className="btn-primary" onClick={() => fileInputRef.current?.click()} disabled={uploadMutation.isPending}>
             {uploadMutation.isPending ? `Uploading ${uploadCount} file${uploadCount > 1 ? 's' : ''}… ${uploadProgress ?? 0}%` : 'Upload CSV(s)'}
           </button>
+          <label className="flex items-center gap-1.5 text-xs text-slate-500">
+            <input type="checkbox" checked={isWhatsapp} onChange={(e) => setIsWhatsapp(e.target.checked)} disabled={uploadMutation.isPending} />
+            This is a WhatsApp export
+          </label>
         </div>
       </div>
 
@@ -78,7 +84,7 @@ export function DatasetsPage() {
       {data && data.length === 0 && (
         <EmptyState
           title="No datasets yet"
-          description="Upload your first Zoho Mail CSV export to see delivery analytics, bounce analysis, and executive insights."
+          description="Upload your first Zoho Mail or WhatsApp gateway CSV export to see delivery analytics, bounce analysis, and executive insights."
         />
       )}
 
@@ -88,6 +94,7 @@ export function DatasetsPage() {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Channel</th>
                 <th>Status</th>
                 <th>Rows</th>
                 <th>Period</th>
@@ -99,6 +106,11 @@ export function DatasetsPage() {
               {data.map((d) => (
                 <tr key={d.id} className="cursor-pointer" onClick={() => navigate(`/datasets/${d.id}`)}>
                   <td className="font-medium text-slate-800">{d.name}</td>
+                  <td>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      {channelLabels(d.source).badge}
+                    </span>
+                  </td>
                   <td>
                     <DatasetStatusBadge status={d.status} />
                   </td>

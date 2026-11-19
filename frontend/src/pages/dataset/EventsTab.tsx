@@ -1,16 +1,20 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useOutletContext } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { listEvents, getEvent } from '@/services/analytics'
 import { LoadingState, ErrorState, EmptyState } from '@/components/Feedback'
 import { Pagination } from '@/components/Pagination'
 import { StatusBadge } from '@/components/Badges'
 import { formatDateTime } from '@/utils/format'
+import { channelLabels } from '@/utils/channel'
+import type { Dataset } from '@/types/api'
 
 const STATUS_OPTIONS = ['', 'SUCCESS', 'HARD_BOUNCE', 'SOFT_BOUNCE', 'FAILED', 'DEFERRED', 'UNKNOWN']
 
 export function EventsTab() {
   const { datasetId } = useParams()
+  const { dataset } = useOutletContext<{ dataset: Dataset }>()
+  const labels = channelLabels(dataset.source)
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState('')
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
@@ -25,7 +29,7 @@ export function EventsTab() {
     <div className="space-y-4">
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-700">Email Events</h2>
+          <h2 className="text-sm font-semibold text-slate-700">{labels.eventsHeading}</h2>
           <select
             className="input w-auto text-xs"
             value={status}
@@ -77,12 +81,24 @@ export function EventsTab() {
         {data && <Pagination meta={data.meta} onPageChange={setPage} />}
       </div>
 
-      {selectedEventId && <EventDetailPanel datasetId={datasetId!} eventId={selectedEventId} onClose={() => setSelectedEventId(null)} />}
+      {selectedEventId && (
+        <EventDetailPanel datasetId={datasetId!} eventId={selectedEventId} isWhatsapp={!labels.hasInfrastructure} onClose={() => setSelectedEventId(null)} />
+      )}
     </div>
   )
 }
 
-function EventDetailPanel({ datasetId, eventId, onClose }: { datasetId: string; eventId: string; onClose: () => void }) {
+function EventDetailPanel({
+  datasetId,
+  eventId,
+  isWhatsapp,
+  onClose,
+}: {
+  datasetId: string
+  eventId: string
+  isWhatsapp: boolean
+  onClose: () => void
+}) {
   const { data, isLoading } = useQuery({ queryKey: ['event', datasetId, eventId], queryFn: () => getEvent(datasetId, eventId) })
 
   return (
@@ -103,18 +119,18 @@ function EventDetailPanel({ datasetId, eventId, onClose }: { datasetId: string; 
                 ['Sender', data.sender_email ?? '—'],
                 ['Recipient', data.recipient_email ?? '—'],
                 ['Status', data.status],
-                ['Bounce Type', data.bounce_type],
-                ['SMTP Code', data.bounce_code ?? '—'],
-                ['Bounce Category', data.bounce_category],
+                !isWhatsapp && ['Bounce Type', data.bounce_type],
+                !isWhatsapp && ['SMTP Code', data.bounce_code ?? '—'],
+                !isWhatsapp && ['Bounce Category', data.bounce_category],
                 ['Bounce Reason', data.bounce_reason ?? '—'],
-                ['Remote IP', data.remote_ip ?? '—'],
-                ['Remote MTA', data.remote_mta ?? '—'],
-                ['Relay Server', data.relay_server ?? '—'],
+                !isWhatsapp && ['Remote IP', data.remote_ip ?? '—'],
+                !isWhatsapp && ['Remote MTA', data.remote_mta ?? '—'],
+                !isWhatsapp && ['Relay Server', data.relay_server ?? '—'],
                 ['Mail Reference', data.mail_reference ?? '—'],
                 ['Processing Time', data.processing_time ? `${data.processing_time} ms` : '—'],
                 ['Retry', data.is_retry ? `Yes (${data.retry_count})` : 'No'],
                 ['Duplicate', data.is_duplicate ? 'Yes' : 'No'],
-              ] as [string, string][]
+              ].filter(Boolean) as [string, string][]
             ).map(([label, value]) => (
               <div key={label}>
                 <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</dt>

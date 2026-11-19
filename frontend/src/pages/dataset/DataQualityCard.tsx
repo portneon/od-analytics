@@ -1,11 +1,15 @@
-import { useParams } from 'react-router-dom'
+import { useParams, useOutletContext } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getDatasetQuality } from '@/services/datasets'
 import { formatNumber } from '@/utils/format'
 import { NotAvailable } from '@/components/Feedback'
+import { channelLabels } from '@/utils/channel'
+import type { Dataset } from '@/types/api'
 
 export function DataQualityCard() {
   const { datasetId } = useParams()
+  const { dataset } = useOutletContext<{ dataset: Dataset }>()
+  const labels = channelLabels(dataset.source)
   const { data } = useQuery({
     queryKey: ['quality', datasetId],
     queryFn: () => getDatasetQuality(datasetId!),
@@ -15,19 +19,20 @@ export function DataQualityCard() {
   if (!data || data.rows === 0) return null
 
   const hasIssues = data.invalid_rows > 0 || data.duplicate_rows > 0 || data.malformed_emails > 0
+  const malformedLabel = labels.hasInfrastructure ? 'Malformed emails' : 'Malformed phone numbers'
 
   return (
     <div className="card p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-700">Data Quality</h2>
         <span className="text-xs text-slate-400">
-          {formatNumber(data.valid_rows)} valid emails from {formatNumber(data.rows)} rows
+          {formatNumber(data.valid_rows)} valid {labels.unitLower} from {formatNumber(data.rows)} rows
         </span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <QualityStat label="Invalid rows" value={data.invalid_rows} warn={data.invalid_rows > 0} />
         <QualityStat label="Duplicates" value={data.duplicate_rows} warn={data.duplicate_rows > 0} />
-        <QualityStat label="Malformed emails" value={data.malformed_emails} warn={data.malformed_emails > 0} />
+        <QualityStat label={malformedLabel} value={data.malformed_emails} warn={data.malformed_emails > 0} />
         <QualityStat label="Missing timestamps" value={data.missing_timestamps} warn={data.missing_timestamps > 0} />
       </div>
       <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">

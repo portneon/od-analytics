@@ -26,7 +26,7 @@ export function DashboardPage() {
         <h1 className="mb-4 text-lg font-semibold text-slate-900">Executive Dashboard</h1>
         <EmptyState
           title="No datasets yet"
-          description="Upload your first Zoho Mail CSV export to see delivery analytics and executive insights here."
+          description="Upload your first Zoho Mail or WhatsApp gateway CSV export to see delivery analytics and executive insights here."
         />
         <div className="mt-4 text-center">
           <button className="btn-primary" onClick={() => navigate('/datasets')}>
@@ -58,7 +58,7 @@ export function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        <StatTile label="Total Emails" value={formatNumber(s.total_emails)} />
+        <StatTile label="Total Events" value={formatNumber(s.total_emails)} />
         <StatTile label="Unique Recipients" value={formatNumber(s.unique_recipients)} />
         <StatTile label="Unique Domains" value={formatNumber(s.unique_domains)} />
         <StatTile label="Delivery Rate" value={formatPercent(s.delivery_rate)} tone={rateTone(s.delivery_rate, 'delivery')} />
@@ -72,7 +72,7 @@ export function DashboardPage() {
         </div>
       )}
       {timeline.data && timeline.data.length > 0 && (
-        <ChartCard title="Email Volume Trend (all datasets)">
+        <ChartCard title="Volume Trend (all datasets)">
           {(expanded) => <TimelineChart data={timeline.data} height={expanded ? 500 : 280} />}
         </ChartCard>
       )}

@@ -36,6 +36,7 @@ async def upload_dataset(
     files: list[UploadFile] | None = File(default=None),
     name: str | None = Form(default=None),
     source: str = Form(default="zoho_mail"),
+    is_whatsapp: bool = Form(default=False),
     db: Session = Depends(get_db),
 ):
     upload_files: list[UploadFile] = []
@@ -52,7 +53,7 @@ async def upload_dataset(
         content = await f.read()
         ds_name = name if (len(upload_files) == 1 and name) else (f.filename or "upload.csv").rsplit(".", 1)[0]
         dataset = dataset_service.create_dataset(
-            db, file_name=f.filename or "upload.csv", content=content, source=source, dataset_name=ds_name
+            db, file_name=f.filename or "upload.csv", content=content, source=source, is_whatsapp=is_whatsapp, dataset_name=ds_name
         )
         job = dataset_service.create_import_job(db, dataset_id=dataset.id)
         db.commit()
@@ -71,6 +72,7 @@ async def upload_multiple_datasets(
     background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     source: str = Form(default="zoho_mail"),
+    is_whatsapp: bool = Form(default=False),
     db: Session = Depends(get_db),
 ):
     results = []
@@ -78,7 +80,7 @@ async def upload_multiple_datasets(
         content = await f.read()
         ds_name = (f.filename or "upload.csv").rsplit(".", 1)[0]
         dataset = dataset_service.create_dataset(
-            db, file_name=f.filename or "upload.csv", content=content, source=source, dataset_name=ds_name
+            db, file_name=f.filename or "upload.csv", content=content, source=source, is_whatsapp=is_whatsapp, dataset_name=ds_name
         )
         job = dataset_service.create_import_job(db, dataset_id=dataset.id)
         db.commit()

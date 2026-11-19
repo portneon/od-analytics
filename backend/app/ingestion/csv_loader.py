@@ -6,6 +6,8 @@ issue instead of having polars silently produce a null on a type mismatch.
 """
 from __future__ import annotations
 
+import csv
+import io
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,6 +36,24 @@ def validate_upload(file_name: str, file_size_bytes: int) -> None:
     if file_size_bytes > settings.MAX_UPLOAD_FILE_SIZE_BYTES:
         max_mb = settings.MAX_UPLOAD_FILE_SIZE_BYTES / (1024 * 1024)
         raise CsvValidationError(f"File exceeds maximum allowed size of {max_mb:.0f}MB")
+
+
+def sniff_header(content: bytes) -> list[str]:
+    """Peek at just the header row of an uploaded file, before the full
+    polars parse -- used to auto-detect which source adapter a CSV belongs
+    to. Never raises: an unreadable/empty header just yields no columns,
+    which detect_source treats as "no match"."""
+    try:
+        text = content.decode("utf-8-sig", errors="ignore")
+    except Exception:  # noqa: BLE001 - best-effort sniffing only
+        return []
+    first_line = next((line for line in text.splitlines() if line.strip()), "")
+    if not first_line:
+        return []
+    try:
+        return next(csv.reader(io.StringIO(first_line)))
+    except (csv.Error, StopIteration):
+        return []
 
 
 def load_csv(file_path: str) -> LoadedCsv:
