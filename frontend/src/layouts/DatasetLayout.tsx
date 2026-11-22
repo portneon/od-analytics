@@ -11,7 +11,7 @@ const TABS = [
   { to: '', label: 'Overview', end: true },
   { to: 'analytics', label: 'Analytics' },
   { to: 'recipients', label: 'Recipients' },
-  { to: 'domains', label: 'Domains', requires: 'hasDomains' as const },
+  { to: 'domains', label: null, requires: 'hasDomains' as const },
   { to: 'subjects', label: 'Subjects' },
   { to: 'senders', label: 'Senders' },
   { to: 'bounces', label: 'Bounces', requires: 'hasBounceClassification' as const },
@@ -90,7 +90,7 @@ export function DatasetLayout() {
                 }`
               }
             >
-              {tab.label}
+              {tab.label ?? labels.domainLabelPlural}
             </NavLink>
           ))}
         </nav>

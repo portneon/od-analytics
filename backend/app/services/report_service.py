@@ -28,10 +28,14 @@ def build_report_data(db: Session, dataset: Dataset) -> dict:
     channel = "whatsapp" if dataset.source == "whatsapp_gateway" else "email"
     overview = overview_analytics.get_overview(db, dataset_id)
     top_recipients = recipients_analytics.list_recipients(db, dataset_id, page=1, page_size=10, sort_by="failure_rate")["items"]
-    # WhatsApp phone numbers have no domain concept, and WhatsApp delivery
-    # outcomes are never classified as SMTP bounces -- both legitimately
-    # come back empty for that channel, not as an error.
-    top_domains = [] if channel == "whatsapp" else domains_analytics.list_domains(db, dataset_id, page=1, page_size=10, sort_by="bounce_rate")["items"]
+    # For WhatsApp the "domain" dimension actually holds the sending
+    # institute (extracted from the message body by the WhatsApp adapter,
+    # since the gateway's own Sender column is just the gateway's number)
+    # -- still meaningful, just not a DNS domain, so it's included for both
+    # channels. WhatsApp delivery outcomes are never classified as SMTP
+    # bounces though, so bounce_reasons legitimately stays empty there.
+    domain_label = "Institutes" if channel == "whatsapp" else "Domains"
+    top_domains = domains_analytics.list_domains(db, dataset_id, page=1, page_size=10, sort_by="bounce_rate")["items"]
     top_subjects = subjects_analytics.list_subjects(db, dataset_id, page=1, page_size=10, sort_by="failure_rate")["items"]
     bounce_reasons = [] if channel == "whatsapp" else bounces_analytics.list_bounce_reasons(db, dataset_id)
     insights = generate_executive_insights(db, dataset_id)
@@ -40,12 +44,13 @@ def build_report_data(db: Session, dataset: Dataset) -> dict:
     for insight in insights:
         recommendations.extend(insight.get("recommendations", []))
     if not recommendations:
-        recommendations.extend(_fallback_observations(top_recipients, top_domains, bounce_reasons))
+        recommendations.extend(_fallback_observations(top_recipients, top_domains, bounce_reasons, domain_label))
     if not recommendations:
         recommendations.append("No significant issues detected in this dataset.")
 
     return {
         "channel": channel,
+        "domain_label": domain_label,
         "dataset": {
             "id": str(dataset.id),
             "name": dataset.name,
@@ -63,7 +68,9 @@ def build_report_data(db: Session, dataset: Dataset) -> dict:
     }
 
 
-def _fallback_observations(top_recipients: list[dict], top_domains: list[dict], bounce_reasons: list[dict]) -> list[str]:
+def _fallback_observations(
+    top_recipients: list[dict], top_domains: list[dict], bounce_reasons: list[dict], domain_label: str = "Domains"
+) -> list[str]:
     """When no anomaly-based insight fired (e.g. too little history for
     statistical significance), still surface the plainest observations from
     data the report already has, so the export isn't just an empty note."""
@@ -71,7 +78,7 @@ def _fallback_observations(top_recipients: list[dict], top_domains: list[dict], 
 
     if top_domains and top_domains[0].get("bounce_rate", 0) > 0:
         d = top_domains[0]
-        observations.append(f"'{d.get('name')}' has the highest bounce rate among domains at {d.get('bounce_rate')}%.")
+        observations.append(f"'{d.get('name')}' has the highest bounce rate among {domain_label.lower()} at {d.get('bounce_rate')}%.")
 
     if top_recipients and top_recipients[0].get("failure_rate", 0) > 0:
         r = top_recipients[0]
@@ -96,6 +103,7 @@ def render_pdf(report: dict) -> bytes:
     is_whatsapp = report.get("channel") == "whatsapp"
     unit_label = "Messages" if is_whatsapp else "Emails"
     channel_label = "WhatsApp" if is_whatsapp else "Email"
+    domain_label = report.get("domain_label", "Domains")
 
     ds = report["dataset"]
     story.append(Paragraph(f"Executive {channel_label} Report — {ds['name']}", styles["Title"]))
@@ -111,11 +119,8 @@ def render_pdf(report: dict) -> bytes:
     story.append(_styled_table(overview_table))
     story.append(Spacer(1, 0.5 * cm))
 
-    # Domains and SMTP-style bounce classification don't exist for a
-    # phone-number-addressed channel like WhatsApp -- the section is
-    # dropped rather than rendered as a confusing, permanently-empty table.
     if report["top_problem_domains"]:
-        story.append(Paragraph("Top Problem Domains", styles["Heading2"]))
+        story.append(Paragraph(f"Top Problem {domain_label}", styles["Heading2"]))
         story.append(_entity_table(report["top_problem_domains"], "name"))
         story.append(Spacer(1, 0.5 * cm))
 
@@ -183,6 +188,7 @@ def _styled_table(rows: list[list[str]]) -> Table:
 
 def render_csv(report: dict) -> str:
     is_whatsapp = report.get("channel") == "whatsapp"
+    domain_label = report.get("domain_label", "Domains")
     buffer = io.StringIO()
     writer = csv.writer(buffer)
 
@@ -191,12 +197,13 @@ def render_csv(report: dict) -> str:
         writer.writerow(["Overview", key, value])
     writer.writerow([])
 
-    # Domains and SMTP-style bounce classification don't exist for a
-    # phone-number-addressed channel like WhatsApp -- the section is
-    # dropped rather than written out as a permanently-empty table.
+    # SMTP-style bounce classification doesn't exist for a phone-number-
+    # addressed channel like WhatsApp -- that section is dropped below
+    # rather than written out as a permanently-empty table. The domain/
+    # institute section applies to both channels (see domain_label above).
     if report["top_problem_domains"]:
-        writer.writerow(["Top Problem Domains"])
-        writer.writerow(["Domain", "Total", "Delivery Rate", "Bounce Rate", "Failure Rate"])
+        writer.writerow([f"Top Problem {domain_label}"])
+        writer.writerow([domain_label[:-1] if domain_label.endswith("s") else domain_label, "Total", "Delivery Rate", "Bounce Rate", "Failure Rate"])
         for d in report["top_problem_domains"]:
             writer.writerow([d["name"], d["total_emails"], d["delivery_rate"], d["bounce_rate"], d["failure_rate"]])
         writer.writerow([])

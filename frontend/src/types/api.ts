@@ -159,6 +159,9 @@ export interface DomainProfile {
     failure_rate: number
     unique_recipients: number
   } | null
+  category_breakdown: { category: string; count: number; percent: number }[]
+  top_recipients: { id: string; name: string; total_emails: number; failures: number; failure_rate: number }[]
+  timeline: { id: string; event_time: string; recipient_email: string | null; status: string; subject: string | null; bounce_category: string | null }[]
 }
 
 export interface BounceReason {

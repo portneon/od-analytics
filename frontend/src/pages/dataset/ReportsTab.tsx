@@ -36,9 +36,9 @@ export function ReportsTab() {
       <div className="card p-6">
         <h2 className="text-sm font-semibold text-slate-700">Executive Report</h2>
         <p className="mt-1 text-sm text-slate-400">
-          {labels.hasDomains
-            ? 'Includes overview metrics, top problem domains & recipients, bounce analysis, and recommendations.'
-            : 'Includes overview metrics, top problem recipients, delivery-failure analysis, and recommendations.'}
+          {labels.hasBounceClassification
+            ? `Includes overview metrics, top problem ${labels.domainLabelPlural.toLowerCase()} & recipients, bounce analysis, and recommendations.`
+            : `Includes overview metrics, top problem ${labels.domainLabelPlural.toLowerCase()} & recipients, delivery-failure analysis, and recommendations.`}
         </p>
         <div className="mt-4 flex gap-2">
           <button className="btn-primary" onClick={() => handleDownload('pdf')} disabled={downloading !== null}>

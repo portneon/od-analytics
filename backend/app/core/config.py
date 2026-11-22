@@ -86,6 +86,14 @@ class Settings(BaseSettings):
     # Timezone
     DEFAULT_TIMEZONE: str = "Asia/Kolkata"
 
+    # Bot/automation integrations (e.g. Zoho Cliq): a shared secret the
+    # caller must present in the X-Bot-Api-Key header. None/empty disables
+    # the endpoint entirely rather than leaving it open with no auth, since
+    # it's meant to be reachable from the public internet.
+    BOT_API_KEY: str | None = None
+    # Optional, used to build a "view full dashboard" link in bot replies.
+    FRONTEND_PUBLIC_URL: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]

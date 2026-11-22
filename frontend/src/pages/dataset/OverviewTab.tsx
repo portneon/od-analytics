@@ -100,7 +100,7 @@ export function OverviewTab() {
       <div className={`grid grid-cols-1 gap-4 ${labels.hasDomains ? 'lg:grid-cols-2' : ''}`}>
         {labels.hasDomains && (
           <div className="card overflow-hidden">
-            <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Top Problem Domains</h2>
+            <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Top Problem {labels.domainLabelPlural}</h2>
             <table className="table-base">
               <tbody>
                 {topDomains.data?.items.map((d) => (

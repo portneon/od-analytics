@@ -19,6 +19,7 @@ from app.analytics.rates import compute_rates
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.logging import get_logger
+from app.ingestion.application_classifier import DEFAULT_CATEGORY
 from app.models.dimensions import Subject
 from app.models.email_event import EmailEvent, EmailStatus
 from app.models.metrics import (
@@ -196,6 +197,53 @@ def calculate_sender_metrics(db: Session, dataset_id: uuid.UUID) -> int:
     return len(rows)
 
 
+def calculate_subject_metrics(db: Session, dataset_id: uuid.UUID) -> int:
+    total, successful, hard, soft, failures = _status_aggregates()
+    stmt = (
+        select(
+            EmailEvent.subject_id, total, successful, hard, soft, failures,
+            func.count(func.distinct(EmailEvent.recipient_id)).label("unique_recipients"),
+        )
+        .where(EmailEvent.dataset_id == dataset_id, EmailEvent.subject_id.is_not(None))
+        .group_by(EmailEvent.subject_id)
+    )
+    rows = []
+    for subject_id, total_v, succ_v, hard_v, soft_v, fail_v, uniq_recip in db.execute(stmt).all():
+        rows.append({
+            "id": uuid.uuid4(),
+            "dataset_id": dataset_id,
+            "subject_id": subject_id,
+            "unique_recipients": int(uniq_recip or 0),
+            **_row_with_rates(total_v, succ_v, hard_v, soft_v, fail_v),
+        })
+    _upsert(db, SubjectMetrics, rows, ["dataset_id", "subject_id"])
+    return len(rows)
+
+
+def calculate_application_metrics(db: Session, dataset_id: uuid.UUID) -> int:
+    total, successful, hard, soft, failures = _status_aggregates()
+    stmt = (
+        select(
+            Subject.category, total, successful, hard, soft, failures,
+            func.count(func.distinct(EmailEvent.recipient_id)).label("unique_recipients"),
+        )
+        .join(Subject, EmailEvent.subject_id == Subject.id)
+        .where(EmailEvent.dataset_id == dataset_id)
+        .group_by(Subject.category)
+    )
+    rows = []
+    for category, total_v, succ_v, hard_v, soft_v, fail_v, uniq_recip in db.execute(stmt).all():
+        rows.append({
+            "id": uuid.uuid4(),
+            "dataset_id": dataset_id,
+            "category": category or DEFAULT_CATEGORY,
+            "unique_recipients": int(uniq_recip or 0),
+            **_row_with_rates(total_v, succ_v, hard_v, soft_v, fail_v),
+        })
+    _upsert(db, ApplicationMetrics, rows, ["dataset_id", "category"])
+    return len(rows)
+
+
 def calculate_bounce_reason_metrics(db: Session, dataset_id: uuid.UUID) -> int:
     count_col = func.count(EmailEvent.id)
     stmt = (
@@ -240,11 +288,13 @@ def calculate_all_metrics(db: Session, dataset_id: uuid.UUID) -> dict[str, int]:
         calculate_recipient_metrics,
         calculate_domain_metrics,
         calculate_sender_metrics,
+        calculate_subject_metrics,
+        calculate_application_metrics,
         calculate_bounce_reason_metrics,
     ]
 
     counts = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(metrics_funcs)) as executor:
         futures = {
             executor.submit(_run_metric, func, dataset_id): func
             for func in metrics_funcs

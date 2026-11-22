@@ -29,6 +29,7 @@ DEFAULT_RULES: list[tuple[str, str, str]] = [
     ("Notification", "contains", "notification"),
     ("Notification", "contains", "alert"),
     ("Notification", "contains", "reminder"),
+    ("Notice", "contains", "notice"),
     ("Cron", "contains", "cron"),
     ("Cron", "contains", "scheduled report"),
     ("Cron", "contains", "daily report"),

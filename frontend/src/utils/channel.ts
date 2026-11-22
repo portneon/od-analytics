@@ -13,6 +13,8 @@ interface ChannelLabels {
   volumeTrend: string
   eventsHeading: string
   hasDomains: boolean
+  domainLabel: string
+  domainLabelPlural: string
   hasBounceClassification: boolean
   hasInfrastructure: boolean
 }
@@ -27,6 +29,8 @@ const LABELS: Record<Channel, ChannelLabels> = {
     volumeTrend: 'Email Volume Trend',
     eventsHeading: 'Email Events',
     hasDomains: true,
+    domainLabel: 'Domain',
+    domainLabelPlural: 'Domains',
     hasBounceClassification: true,
     hasInfrastructure: true,
   },
@@ -38,7 +42,15 @@ const LABELS: Record<Channel, ChannelLabels> = {
     contact: 'Phone Number',
     volumeTrend: 'Message Volume Trend',
     eventsHeading: 'WhatsApp Messages',
-    hasDomains: false,
+    // The gateway's "Sender" is always the same gateway number, so it
+    // carries no org identity -- the WhatsApp adapter extracts the actual
+    // sending institute from the message body and rides it in on the same
+    // Domain dimension/metrics the email channel uses for recipient
+    // domains. Same data plumbing, different real-world meaning, so it's
+    // relabeled here rather than given a parallel dimension.
+    hasDomains: true,
+    domainLabel: 'Institute',
+    domainLabelPlural: 'Institutes',
     hasBounceClassification: false,
     hasInfrastructure: false,
   },
